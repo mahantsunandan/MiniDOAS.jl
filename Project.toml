@@ -1,0 +1,44 @@
+name = "MiniDOAS"
+uuid = "4a44fe3d-1ec8-44ce-8bb3-142534768756"
+authors = ["Sunandan Mahant <sunandanmahant@outlook.com>"]
+version = "0.1.0"
+
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
+
+[weakdeps]
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
+
+[extensions]
+MiniDOASGUIExt = ["HTTP", "JSON3"]
+MiniDOASMakieExt = "Makie"
+MiniDOASNetCDFExt = "NCDatasets"
+
+[compat]
+Dates = "1"
+HTTP = "1"
+JSON3 = "1"
+LinearAlgebra = "1"
+Makie = "0.21, 0.22, 0.23, 0.24"
+NCDatasets = "0.14"
+Printf = "1"
+Random = "1"
+Sockets = "1"
+Test = "1"
+julia = "1.10"
+
+[extras]
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["HTTP", "JSON3", "NCDatasets", "Test"]

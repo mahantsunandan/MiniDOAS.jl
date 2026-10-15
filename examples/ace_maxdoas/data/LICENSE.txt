@@ -1,0 +1,19 @@
+The spectra in this folder are adapted from:
+
+  Benavent, N., Garcia-Nieto, D., Cuevas, C. A. and Saiz-Lopez, A. (2020). Raw spectra
+  measurements of scattered sunlight collected using a MAX-DOAS (Multi-Axis Differential
+  Optical Absorption Spectroscopy) instrument in the austral summer of 2016/17 during the
+  Antarctic Circumnavigation Expedition (ACE). Version 1.0 [Data set]. Zenodo.
+  https://doi.org/10.5281/zenodo.3827443
+
+License: Creative Commons Attribution 4.0 International (CC BY 4.0),
+https://creativecommons.org/licenses/by/4.0/
+
+Changes: the 19 optical-fibre columns of each spectrum were summed into one spectrum; the
+spectra were rewritten in the MFC STD text format with header information (times, elevation
+angle, solar zenith angle, scans, exposure time) from the data set's LiveInfo files and the
+ship's position from its GPS files (converted from degrees and minutes to decimal degrees); the per-pixel wavelengths were written once to
+calibration/ace_uv_instrument.clb. The counts are unchanged. The conversion is
+../tools/fetch_ace_spectra.py; see ../README.md.
+
+The data set's authors are not associated with MiniDOAS.jl and do not endorse it.

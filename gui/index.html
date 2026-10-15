@@ -1,0 +1,1858 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MiniDOAS.jl</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath d='M5 20c3 0 3-9 6-9s3 12 6 12 3-15 6-15 3 8 4 8' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<!--
+  MiniDOAS.jl web GUI. Copyright (c) 2026 Sunandan Mahant <sunandanmahant@outlook.com>.
+  BSD-3-Clause, see LICENSE. The fit is a Julia port of the QDOAS analysis core (BIRA-IASB and S[&]T).
+  Served by MiniDOAS.serve_gui(); talks only to that local server; no external resources.
+-->
+<style>
+  :root {
+    --bg: #f2f4f7; --surface: #ffffff; --surface-2: #f7f9fb; --surface-3: #eef2f5;
+    --text: #16202b; --muted: #5b6878; --faint: #8b97a5; --border: #e1e6eb; --border-strong: #cdd5de;
+    --accent: #0f766e; --accent-strong: #0b5c55; --accent-soft: #e2f2f0; --accent-text: #0b5c55;
+    --amber: #d97706; --amber-soft: #fef3c7; --ok: #15803d; --bad: #c2410c; --bad-soft: #fff1e8;
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+    --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.06);
+    --shadow-lg: 0 24px 60px rgba(16, 24, 40, 0.22), 0 4px 14px rgba(16, 24, 40, 0.10);
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", Roboto, Arial, sans-serif;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1117; --surface: #151b23; --surface-2: #1a212a; --surface-3: #202833;
+    --text: #e6edf3; --muted: #9ba8b5; --faint: #6f7c89; --border: #262f3a; --border-strong: #36414e;
+    --accent: #2cc5b1; --accent-strong: #5eead4; --accent-soft: #11302d; --accent-text: #5eead4;
+    --amber: #fbbf24; --amber-soft: #3a2c0b; --ok: #4ade80; --bad: #fb923c; --bad-soft: #3a1f10;
+    --shadow-sm: none; --shadow: 0 1px 2px rgba(0, 0, 0, 0.4); --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--text); font: 13.5px/1.45 var(--sans); display: flex; flex-direction: column;
+         -webkit-font-smoothing: antialiased; }
+  button, input, select { font: inherit; color: inherit; }
+  a { color: var(--accent-text); }
+  kbd { font: 11px var(--mono); padding: 1px 5px; border-radius: 5px; border: 1px solid var(--border-strong);
+        border-bottom-width: 2px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+  .muted { color: var(--muted); } .faint { color: var(--faint); } .mono { font-family: var(--mono); }
+  .grow { flex: 1; min-width: 0; }
+  .hidden { display: none !important; }
+
+  /* buttons */
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 8px;
+         border: 1px solid var(--border-strong); background: var(--surface); cursor: pointer; white-space: nowrap;
+         box-shadow: var(--shadow-sm); transition: background .12s, border-color .12s; }
+  .btn:hover:not(:disabled) { background: var(--surface-3); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  :root[data-theme="dark"] .btn.primary { color: #062a26; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-strong); border-color: var(--accent-strong); }
+  .btn.ghost { border-color: transparent; background: transparent; box-shadow: none; }
+  .btn.ghost:hover:not(:disabled) { background: var(--surface-3); }
+  .btn.small { height: 26px; padding: 0 8px; font-size: 12.5px; }
+  .btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+  .icon-btn { width: 30px; padding: 0; justify-content: center; }
+  .btn .kbdhint { font-size: 11px; color: var(--faint); margin-left: 2px; }
+  .btn.primary .kbdhint { color: rgba(255, 255, 255, 0.75); }
+  input[type=text], input[type=number], select {
+    height: 30px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); }
+  input[type=number] { width: 84px; font-variant-numeric: tabular-nums; }
+  input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* app bar */
+  .appbar { display: flex; align-items: center; gap: 14px; height: 54px; padding: 0 14px; background: var(--surface);
+            border-bottom: 1px solid var(--border); flex-shrink: 0; z-index: 5; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 15px; letter-spacing: -0.01em; }
+  .brand svg { width: 26px; height: 26px; }
+  .brand .ver { font-weight: 500; font-size: 11px; color: var(--faint); padding: 1px 6px; border: 1px solid var(--border); border-radius: 999px; }
+  .projbox { display: flex; flex-direction: column; min-width: 0; padding-left: 14px; border-left: 1px solid var(--border); line-height: 1.25; }
+  .projbox .pname { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .projbox .ppath { font: 11.5px var(--mono); color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+  .appbar .actions { display: flex; align-items: center; gap: 6px; }
+  .sep-v { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+  .menu-wrap { position: relative; }
+  .menu { position: absolute; right: 0; top: 36px; min-width: 290px; background: var(--surface); border: 1px solid var(--border);
+          border-radius: 10px; box-shadow: var(--shadow-lg); padding: 6px; display: none; z-index: 40; }
+  .menu.open { display: block; }
+  .menu button { display: flex; width: 100%; align-items: center; gap: 10px; border: 0; background: none; padding: 7px 10px;
+                 border-radius: 7px; text-align: left; cursor: pointer; }
+  .menu button:hover:not(:disabled) { background: var(--surface-3); }
+  .menu button:disabled { opacity: 0.4; cursor: default; }
+  .menu button .k { margin-left: auto; }
+  .menu .mh { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); padding: 6px 10px 3px; }
+  .menu hr { border: 0; border-top: 1px solid var(--border); margin: 5px 4px; }
+  .topline { height: 2px; background: transparent; position: relative; overflow: hidden; flex-shrink: 0; }
+  .topline.on::after { content: ""; position: absolute; left: -30%; width: 30%; height: 100%; background: var(--accent);
+                       animation: slide 1s ease-in-out infinite; }
+  @keyframes slide { to { left: 100%; } }
+
+  /* layout */
+  .layout { flex: 1; display: flex; min-height: 0; }
+  .side { width: 296px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  .side h2 { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em; color: var(--faint);
+             margin: 14px 16px 6px; display: flex; align-items: center; gap: 6px; }
+  .side h2 .count { font-weight: 500; letter-spacing: 0; text-transform: none; }
+  .side h2 .src { margin-left: auto; font-weight: 500; text-transform: none; letter-spacing: 0; }
+  .winlist { margin: 0 8px; }
+  .winrow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+  .winrow:hover { background: var(--surface-3); }
+  .winrow.sel { background: var(--accent-soft); }
+  .winrow input { margin: 0; accent-color: var(--accent); }
+  .winrow .nm { font-weight: 550; }
+  .winrow .rng { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .winrow .edited { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); }
+  .spec-tools { display: flex; gap: 6px; margin: 0 12px 8px; }
+  .spec-tools input { flex: 1; min-width: 0; }
+  .speclist { flex: 1; overflow: auto; margin: 0 8px; padding-bottom: 6px; }
+  .spec { padding: 4px 8px; border-radius: 7px; cursor: pointer; font: 12px var(--mono); display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+  .spec:hover { background: var(--surface-3); }
+  .spec.sel { background: var(--accent); color: #fff; }
+  :root[data-theme="dark"] .spec.sel { color: #062a26; }
+  .spec .dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--border-strong); flex-shrink: 0; }
+  .spec.ok .dot { background: var(--ok); border-color: var(--ok); }
+  .spec.failed .dot { background: var(--bad); border-color: var(--bad); }
+  .spec.sel .dot { border-color: rgba(255, 255, 255, 0.8); }
+  .spec .nm { overflow: hidden; text-overflow: ellipsis; }
+  .navbar { display: flex; gap: 4px; padding: 10px 12px; border-top: 1px solid var(--border); align-items: center; }
+  .navbar .btn.primary { flex: 1; justify-content: center; }
+  .work { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .tabs { display: flex; align-items: center; gap: 2px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .tab { border: 0; background: none; padding: 6px 12px; border-radius: 8px; color: var(--muted); cursor: pointer; font-weight: 550; }
+  .tab:hover { background: var(--surface-3); color: var(--text); }
+  .tab.active { background: var(--accent-soft); color: var(--accent-text); }
+  .tabs .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .pane { display: none; flex: 1; overflow: auto; padding: 16px; }
+  .pane.active { display: block; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  .card + .card { margin-top: 14px; }
+  .card-h { display: flex; align-items: center; gap: 10px; padding: 11px 14px 0; flex-wrap: wrap; }
+  .card-h h3 { margin: 0; font-size: 13.5px; font-weight: 650; }
+  .card-b { padding: 10px 14px 14px; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; padding: 1px 8px; border-radius: 999px;
+          border: 1px solid var(--border); color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+  .pill.amber { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 45%, transparent); background: var(--amber-soft); }
+  .pill.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: var(--bad-soft); }
+  .pill.ok { color: var(--ok); }
+  .swatch { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+
+  /* fit view */
+  .fit-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .fit-head .title { font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+  .fit-head .meta { color: var(--muted); font-size: 12.5px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .wchips { display: flex; gap: 4px; margin-left: auto; background: var(--surface-3); padding: 3px; border-radius: 9px; }
+  .wchip { border: 0; background: none; padding: 4px 11px; border-radius: 7px; cursor: pointer; color: var(--muted); font-weight: 550; }
+  .wchip.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .wchip .n { font-size: 10.5px; color: var(--faint); margin-left: 4px; }
+  .fit-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
+  .fig { position: relative; }
+  .fig svg { display: block; width: 100%; height: auto; user-select: none; }
+  .fig .wbr { cursor: pointer; }
+  .fig .wbr:hover path { stroke: var(--accent); stroke-width: 1.6; }
+  .fig .wbr:hover text { fill: var(--accent-text); font-weight: 600; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-left: auto; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid; }
+  .legend i.dot { width: 7px; height: 7px; border: 0; border-radius: 50%; }
+  .species-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; margin-top: 14px; }
+  .species-grid .card { margin: 0; }
+  .sp-h { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 0; }
+  .sp-h b { font-size: 13.5px; }
+  .sp-h .val { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  .sp-h .rel { color: var(--faint); font-size: 11.5px; }
+  .tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+         box-shadow: var(--shadow-lg); padding: 6px 9px; font-size: 12px; line-height: 1.5; white-space: nowrap; display: none; z-index: 3;
+         font-variant-numeric: tabular-nums; }
+  .tip b { font-weight: 600; }
+  .inspector { position: sticky; top: 0; display: flex; flex-direction: column; gap: 14px; }
+  .inspector .card + .card { margin-top: 0; }
+  .field-row { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; flex-wrap: wrap; }
+  .field-row > label { color: var(--muted); font-size: 12.5px; min-width: 76px; }
+  .inspector input[type=number] { width: 72px; }
+  .seg { display: inline-flex; background: var(--surface-3); border-radius: 8px; padding: 2px; gap: 1px; flex-wrap: wrap; }
+  .seg button { border: 0; background: none; min-width: 26px; height: 24px; padding: 0 6px; border-radius: 6px; cursor: pointer; color: var(--muted); font-size: 12.5px; }
+  .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow); font-weight: 600; }
+  .xs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .xs-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-strong); background: var(--surface);
+             border-radius: 999px; padding: 2px 10px 2px 8px; cursor: pointer; font-size: 12.5px; }
+  .xs-chip.off { opacity: 0.5; text-decoration: line-through; }
+  .switch { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); cursor: pointer; margin-left: auto; }
+  .switch input { appearance: none; width: 30px; height: 17px; border-radius: 999px; background: var(--border-strong); position: relative; cursor: pointer; margin: 0; transition: background .15s; }
+  .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .switch input:checked { background: var(--accent); }
+  .switch input:checked::after { left: 15px; }
+  .hint { color: var(--faint); font-size: 11.5px; margin: 10px 0 0; line-height: 1.6; }
+  table { border-collapse: collapse; font-variant-numeric: tabular-nums; width: 100%; }
+  th, td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--faint); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  td.delta { font-size: 12px; }
+  td.delta.big { color: var(--amber); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border-radius: 9px; overflow: hidden; border: 1px solid var(--border); }
+  .stats div { background: var(--surface); padding: 7px 10px; }
+  .stats small { display: block; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; }
+  .stats b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .banner { padding: 9px 12px; border-radius: 9px; background: var(--bad-soft); color: var(--bad); margin-bottom: 12px; white-space: pre-wrap; }
+
+  /* welcome */
+  .welcome { max-width: 760px; margin: 6vh auto 0; }
+  .welcome h1 { font-size: 26px; letter-spacing: -0.02em; margin: 0 0 6px; }
+  .welcome p { color: var(--muted); margin: 0 0 18px; font-size: 14px; }
+  .recent { display: flex; flex-direction: column; gap: 2px; }
+  .recent button { display: flex; flex-direction: column; align-items: flex-start; border: 0; background: none; padding: 8px 10px; border-radius: 8px; cursor: pointer; text-align: left; }
+  .recent button:hover { background: var(--surface-3); }
+  .recent .p { font: 11.5px var(--mono); color: var(--faint); }
+  .empty { color: var(--muted); text-align: center; padding: 12vh 20px; }
+
+  /* lab, results, project */
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
+  .ctl { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--muted); }
+  .ctl .pair { display: flex; align-items: center; gap: 5px; color: var(--faint); }
+  .ctl input[type=number] { width: 76px; }
+  .progress { height: 6px; background: var(--surface-3); border-radius: 999px; overflow: hidden; min-width: 160px; flex: 1; }
+  .progress div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+  .lab-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; margin-top: 14px; }
+  .lab-grid .card + .card { margin-top: 0; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 12.5px; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  .kv span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-wrap { max-height: 52vh; overflow: auto; border-top: 1px solid var(--border); }
+  .table-wrap table { font-size: 12px; width: auto; min-width: 100%; }
+  .table-wrap th { position: sticky; top: 0; background: var(--surface); z-index: 1; text-transform: none; letter-spacing: 0; font-size: 11.5px; }
+  .table-wrap tr { cursor: pointer; }
+  .table-wrap tbody tr:hover td { background: var(--surface-2); }
+  .table-wrap tr.sel td { background: var(--accent-soft); }
+  .xs-table td, .xs-table th { text-align: left; }
+  .xs-table td.file { font: 11.5px var(--mono); color: var(--muted); max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+  .proj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .proj-grid .card + .card { margin-top: 0; }
+  .about { max-width: 860px; }
+  .about p { line-height: 1.6; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; align-items: center; font-size: 12.5px; }
+  .keys .k { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  /* status bar */
+  .statusbar { display: flex; align-items: center; gap: 14px; height: 26px; padding: 0 12px; font-size: 11.5px; color: var(--muted);
+               background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; }
+  .statusbar .conn { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 5px; }
+  .statusbar .conn.off { background: var(--bad); }
+  .statusbar .r { margin-left: auto; display: flex; gap: 14px; align-items: center; }
+
+  /* dialogs */
+  .modal { position: fixed; inset: 0; background: rgba(15, 23, 32, 0.38); backdrop-filter: blur(2px); display: none; align-items: center; justify-content: center; z-index: 50; }
+  .modal.open { display: flex; }
+  .dialog { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg);
+            width: min(860px, 95vw); max-height: 86vh; display: flex; flex-direction: column; overflow: hidden; }
+  .dialog > header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .dialog > header h2 { margin: 0; font-size: 14.5px; }
+  .dialog > footer { display: flex; align-items: center; gap: 8px; padding: 11px 16px; border-top: 1px solid var(--border); background: var(--surface-2); flex-wrap: wrap; }
+  .fd-bar { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  .crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; flex: 1; scrollbar-width: none; }
+  .crumbs button { border: 0; background: none; padding: 3px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; font-size: 12.5px; }
+  .crumbs button:hover { background: var(--surface-3); }
+  .crumbs button:last-child { font-weight: 650; }
+  .crumbs .slash { color: var(--faint); }
+  .fd-body { display: flex; min-height: 340px; height: 52vh; }
+  .fd-places { width: 190px; border-right: 1px solid var(--border); padding: 8px; overflow: auto; background: var(--surface-2); flex-shrink: 0; }
+  .fd-places .mh { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--faint); padding: 8px 8px 3px; }
+  .fd-places button { display: flex; width: 100%; gap: 7px; align-items: center; border: 0; background: none; padding: 5px 8px; border-radius: 7px;
+                      cursor: pointer; text-align: left; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fd-places button:hover { background: var(--surface-3); }
+  .fd-places .ic { width: 15px; height: 15px; flex-shrink: 0; color: #3b82f6; }
+  .fd-list { flex: 1; overflow: auto; padding: 6px; outline: none; }
+  .fd-row { display: flex; align-items: center; gap: 9px; padding: 5px 9px; border-radius: 7px; cursor: default; font-size: 13px; user-select: none; }
+  .fd-row:hover { background: var(--surface-3); }
+  .fd-row.sel { background: var(--accent); color: #fff; }
+  :root[data-theme="dark"] .fd-row.sel { color: #062a26; }
+  .fd-row .ic { width: 16px; height: 16px; flex-shrink: 0; color: var(--faint); }
+  .fd-row.dir .ic { color: #3b82f6; }
+  .fd-row.sel .ic { color: inherit; }
+  .fd-row .size { margin-left: auto; color: var(--faint); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+  .fd-row.sel .size { color: inherit; opacity: .8; }
+  .fd-row.dim { opacity: 0.45; }
+  .fd-empty { color: var(--faint); padding: 30px; text-align: center; }
+  #toasts { position: fixed; right: 16px; bottom: 38px; display: flex; flex-direction: column; gap: 8px; z-index: 60; align-items: flex-end; }
+  .toast { max-width: 520px; padding: 10px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border);
+           box-shadow: var(--shadow-lg); font-size: 13px; animation: pop .16s ease-out; white-space: pre-wrap; }
+  .toast.bad { border-left: 3px solid var(--bad); }
+  .toast.good { border-left: 3px solid var(--ok); }
+  @keyframes pop { from { transform: translateY(6px); opacity: 0; } }
+  @media (max-width: 1180px) { .fit-grid, .lab-grid { grid-template-columns: minmax(0, 1fr); } .inspector { position: static; } }
+  @media (max-width: 860px) { .layout { flex-direction: column; } .side { width: 100%; max-height: 42vh; } .proj-grid { grid-template-columns: 1fr; }
+                              .projbox { display: none; } .appbar .lbl { display: none; } }
+</style>
+</head>
+<body>
+<header class="appbar">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#0f766e"/></linearGradient></defs>
+      <rect width="32" height="32" rx="8" fill="url(#lg)"/><path d="M5 20c3 0 3-9 6-9s3 12 6 12 3-15 6-15 3 8 4 8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+    MiniDOAS.jl <span class="ver" id="ver"></span>
+  </div>
+  <div class="projbox grow" id="projBox" title="">
+    <span class="pname" id="projName">No project open</span>
+    <span class="ppath" id="projPath">&lrm;Open a QDOAS project (.xml) to start</span>
+  </div>
+  <div class="actions">
+    <button class="btn" id="openBtn" title="Open a QDOAS project (Ctrl+O)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span class="lbl">Open project</span></button>
+    <button class="btn" id="saveBtn" disabled title="Save the project with your window edits as a new file (Ctrl+S)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 1-2z"/><path d="M8 3v5h8V3M8 21v-7h8v7"/></svg><span class="lbl">Save as…</span></button>
+    <div class="menu-wrap">
+      <button class="btn" id="exportBtn" title="Export results, curves and figures"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg><span class="lbl">Export</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="menu" id="exportMenu">
+        <div class="mh">Results</div>
+        <button data-act="csvAll">Results table, all analysed spectra (CSV)<span class="k"><kbd>Ctrl</kbd> <kbd>E</kbd></span></button>
+        <button data-act="csvOne">Results of this spectrum (CSV)</button>
+        <button data-act="netcdf">This spectrum in QDOAS's layout (NetCDF)</button>
+        <hr><div class="mh">This fit</div>
+        <button data-act="curves">Fitted curves of this window (CSV)</button>
+        <button data-act="svg">Figure (SVG)</button>
+        <button data-act="png">Figure (PNG)</button>
+      </div>
+    </div>
+    <div class="sep-v"></div>
+    <button class="btn ghost icon-btn" id="keysBtn" title="Keyboard shortcuts (?)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button>
+    <button class="btn ghost icon-btn" id="themeBtn" title="Light / dark (D)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+  </div>
+</header>
+<div class="topline" id="topline"></div>
+<div class="layout">
+  <aside class="side">
+    <h2>Analysis windows</h2>
+    <div class="winlist" id="winList"><div class="faint" style="padding:2px 8px 6px">No project open</div></div>
+    <h2>Spectra <span class="count" id="specCount"></span><span class="src" id="specSrc"></span></h2>
+    <div class="spec-tools">
+      <input type="text" id="specFilter" placeholder="Filter, e.g. *_e+02*   ( / )" spellcheck="false">
+      <button class="btn icon-btn" id="folderBtn" title="Analyse the spectra of a folder (Ctrl+Shift+O)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/></svg></button>
+    </div>
+    <div class="speclist" id="specList"></div>
+    <div class="navbar">
+      <button class="btn icon-btn" data-nav="-1" title="Previous spectrum (↑)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button class="btn primary" id="fitBtn" disabled title="Fit the selected spectrum (Enter)">Fit <span class="kbdhint">↵</span></button>
+      <button class="btn icon-btn" data-nav="1" title="Next spectrum (↓)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg></button>
+      <button class="btn" id="batchBtn" disabled title="Analyse every listed spectrum (Ctrl+Enter)">Run all</button>
+    </div>
+  </aside>
+  <section class="work">
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-pane="fit" title="F">Fit</button>
+      <button class="tab" data-pane="lab" title="M">Fit window map</button>
+      <button class="tab" data-pane="results" title="R">Results</button>
+      <button class="tab" data-pane="project" title="P">Project</button>
+      <button class="tab" data-pane="about">About</button>
+      <div class="right"><span class="pill amber hidden" id="editedPill" title="The analysis windows differ from the project file">Settings edited</span></div>
+    </nav>
+    <div class="pane active" id="pane-fit"></div>
+    <div class="pane" id="pane-lab"></div>
+    <div class="pane" id="pane-results"></div>
+    <div class="pane" id="pane-project"></div>
+    <div class="pane" id="pane-about"></div>
+  </section>
+</div>
+<footer class="statusbar">
+  <span><span class="conn" id="conn"></span><span id="runtime">Connecting…</span></span>
+  <span id="activity"></span>
+  <span class="r"><span id="resCount"></span></span>
+</footer>
+
+<div class="modal" id="fileModal">
+  <div class="dialog" role="dialog" aria-modal="true">
+    <header><h2 id="fdTitle">Open</h2><span class="grow"></span><button class="btn ghost icon-btn" data-close title="Close (Esc)">✕</button></header>
+    <div class="fd-bar">
+      <button class="btn small icon-btn" id="fdUp" title="Up (Backspace)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+      <div class="crumbs" id="fdCrumbs"></div>
+      <input type="text" id="fdPath" placeholder="Type a path and press Enter" spellcheck="false" style="width:30%">
+    </div>
+    <div class="fd-body">
+      <nav class="fd-places" id="fdPlaces"></nav>
+      <div class="fd-list" id="fdList" tabindex="0"></div>
+    </div>
+    <footer id="fdFoot">
+      <span id="fdFolderOpts" class="hidden" style="display:flex;gap:8px;align-items:center">
+        <label class="muted">Files</label><input type="text" id="fdFilter" value="*.STD" style="width:110px" spellcheck="false">
+        <label class="switch" style="margin:0"><input type="checkbox" id="fdRecursive"> sub-folders</label>
+        <span class="faint" id="fdCount"></span>
+      </span>
+      <span id="fdSaveOpts" class="hidden" style="display:flex;gap:8px;align-items:center;flex:1">
+        <label class="muted">File name</label><input type="text" id="fdName" style="flex:1" spellcheck="false">
+      </span>
+      <label class="switch" id="fdAllWrap" style="margin:0"><input type="checkbox" id="fdAll"> all files</label>
+      <span class="grow"></span>
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn primary" id="fdOk">Open</button>
+    </footer>
+  </div>
+</div>
+
+<div class="modal" id="keysModal">
+  <div class="dialog" style="width:min(640px,95vw)">
+    <header><h2>Keyboard shortcuts</h2><span class="grow"></span><button class="btn ghost icon-btn" data-close title="Close (Esc)">✕</button></header>
+    <div style="padding:16px;overflow:auto" id="keysBody"></div>
+  </div>
+</div>
+<div id="toasts"></div>
+
+<script>
+'use strict';
+// =============================================================================
+// small helpers
+// =============================================================================
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const base = p => String(p).split(/[\\/]/).pop();
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const tilde = p => { const h = S && S.st && S.st.home; return h && String(p).startsWith(h) ? '~' + String(p).slice(h.length) : String(p); };
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+function pref(k, d) { try { const v = localStorage.getItem('minidoas.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } }
+function setPref(k, v) { try { localStorage.setItem('minidoas.' + k, JSON.stringify(v)); } catch (e) {} }
+function debounce(f, ms) { let h; return (...a) => { clearTimeout(h); h = setTimeout(() => f(...a), ms); }; }
+
+const SUP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '-': '⁻' };
+const sup = n => String(n).split('').map(c => SUP[c] || c).join('');
+const trim0 = s => s.includes('e') ? s : s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+// numbers for people: 0.0123, 1234, 3.32×10⁴³
+function num(v, d = 3) {
+  if (v === null || v === undefined || !isFinite(v)) return '–';
+  if (v === 0) return '0';
+  if (Number.isInteger(v) && Math.abs(v) < 1e6) return String(v);
+  const e = Math.floor(Math.log10(Math.abs(v)));
+  if (e >= -3 && e < 5) return trim0(v.toFixed(Math.max(0, d - 1 - e)));
+  return `${(v / 10 ** e).toFixed(d - 1)}×10${sup(e)}`.replace('-', '−');
+}
+// value ± error sharing one power of ten: "3.321 ± 0.057 ×10⁴³"
+function pm(v, err, d = 3) {
+  if (v === null || !isFinite(v)) return '–';
+  if (err === null || !isFinite(err) || err === 1) return num(v, d + 1);
+  const e = Math.floor(Math.log10(Math.max(Math.abs(v), Math.abs(err))));
+  const f = (e >= -2 && e < 4) ? 0 : e;
+  const k = 10 ** f, dec = Math.max(0, Math.min(6, d - 1 - Math.floor(Math.log10(Math.abs(err / k)))));
+  const s = `${(v / k).toFixed(dec)} ± ${(err / k).toFixed(dec)}`.replace(/-/g, '−');
+  return f ? `${s} ×10${sup(f)}` : s;
+}
+
+// =============================================================================
+// server calls
+// =============================================================================
+let inflight = 0;
+function busy(d) { inflight = Math.max(0, inflight + d); $('#topline').classList.toggle('on', inflight > 0); }
+async function api(path, body, { raw = false } = {}) {
+  busy(1);
+  try {
+    const opts = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+    let r;
+    try { r = await fetch(path, opts); } catch (e) { setConn(false); throw new Error('The MiniDOAS.jl server is not reachable. Is Julia still running?'); }
+    setConn(true);
+    const ct = r.headers.get('Content-Type') || '';
+    if (ct.includes('application/json')) {
+      const j = await r.json();
+      if (j && j.error) throw new Error(j.error);
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return j;
+    }
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return raw ? r : r.text();
+  } finally { busy(-1); }
+}
+function setConn(ok) { $('#conn').classList.toggle('off', !ok); }
+function toast(msg, kind = '') {
+  const t = document.createElement('div');
+  t.className = 'toast ' + kind; t.textContent = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(() => t.remove(), kind === 'bad' ? 9000 : 3600);
+}
+function activity(s) { $('#activity').textContent = s || ''; }
+function download(name, blob) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+async function downloadFrom(path, body, fallback) {
+  const r = await api(path, body, { raw: true });
+  const cd = r.headers.get('Content-Disposition') || '';
+  const m = cd.match(/filename="([^"]+)"/);
+  download(m ? m[1] : fallback, await r.blob());
+}
+
+// =============================================================================
+// state
+// =============================================================================
+const S = {
+  st: null, project: null, spectra: [], shown: [], fromFolder: '', selected: null,
+  edits: {}, history: [], future: [],
+  win: null,                     // window picked in the side list / project pane
+  fit: null, fitWin: null, fitSeq: 0, fitError: '', live: pref('live', true),
+  status: {}, results: null, resultsCol: null, resultsX: 'time', colorBy: 'elevation', resultsSel: null,
+  map: null, mapQty: null, mapCell: null, mapHover: null,
+  tab: 'fit',
+};
+const hasEdits = () => Object.keys(S.edits).length > 0;
+const sentEdits = () => hasEdits() ? S.edits : null;
+const projWin = name => S.project && S.project.windows.find(w => w.name === name);
+function winSettings(name) {             // the window as the next fit will use it
+  const w = projWin(name), e = S.edits[name] || {};
+  if (!w) return null;
+  return { name, enabled: e.enabled !== false, lmin: e.lmin ?? w.lmin, lmax: e.lmax ?? w.lmax,
+           poly: e.poly_order ?? w.poly_order, exclude: new Set(e.exclude || []), w };
+}
+
+// =============================================================================
+// plots: SVG drawn here, at the pixel size of their container
+// =============================================================================
+const PAL = {
+  light: { bg: '#ffffff', text: '#2a3441', muted: '#6b7785', axis: '#aab4bf', grid: '#edf0f3', obs: '#334155',
+           meas: '#8693a1', model: '#0f766e', resid: '#475569', band: 'rgba(15,118,110,0.11)', zero: '#c5ced7',
+           win: '#d97706', winFill: 'rgba(245,158,11,0.12)', winOther: '#b9c2cc', cross: '#0f172a', poly: '#64748b' },
+  dark: { bg: '#151b23', text: '#d6dee6', muted: '#94a1ae', axis: '#46515e', grid: '#222a34', obs: '#cbd5e1',
+          meas: '#7b8895', model: '#2dd4bf', resid: '#a3afbb', band: 'rgba(45,212,191,0.13)', zero: '#3a4552',
+          win: '#fbbf24', winFill: 'rgba(251,191,36,0.13)', winOther: '#4b5663', cross: '#e6edf3', poly: '#94a3b8' },
+};
+const theme = () => document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, 'Helvetica Neue', Roboto, Arial, sans-serif";
+const SPECIES = { NO2: '#e0562b', O3: '#2563eb', O4: '#059669', SO2: '#c026d3', BrO: '#a16207', HCHO: '#d97706', CH2O: '#d97706',
+                  H2O: '#0891b2', Ring: '#7c3aed', OClO: '#65a30d', IO: '#be123c', CHOCHO: '#0d9488', HONO: '#db2777' };
+const FALLBACK = ['#2563eb', '#e0562b', '#059669', '#c026d3', '#d97706', '#0891b2', '#7c3aed', '#a16207', '#be123c'];
+const speciesColor = (name, i) => SPECIES[name] || SPECIES[String(name).replace(/[_ ].*$/, '')] || FALLBACK[i % FALLBACK.length];
+
+function extent(arrays, pad = 0) {
+  let lo = Infinity, hi = -Infinity;
+  for (const a of arrays) for (const v of a || []) if (v !== null && isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  if (lo === Infinity) return [0, 1];
+  if (lo === hi) { const d = Math.abs(lo) * 0.05 || 1; lo -= d; hi += d; }
+  const p = (hi - lo) * pad;
+  return [lo - p, hi + p];
+}
+function ticks(lo, hi, n = 5) {
+  const span = hi - lo;
+  if (!(span > 0) || !isFinite(span)) return { t: [lo], step: 1 };
+  const raw = span / n, mag = 10 ** Math.floor(Math.log10(raw)), f = raw / mag;
+  const step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag;
+  const t = [];
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + step * 1e-9; v += step) t.push(Math.abs(v) < step * 1e-9 ? 0 : v);
+  return { t, step };
+}
+// tick labels, with one ×10ⁿ for very small or large numbers
+function tickText(t, step) {
+  const m = Math.max(...t.map(Math.abs));
+  let e = m > 0 ? Math.floor(Math.log10(m)) : 0;
+  if (e > -3 && e < 5) e = 0;
+  const k = 10 ** e, dec = Math.max(0, -Math.floor(Math.log10(step / k) + 1e-9));
+  return { labels: t.map(v => { let s = (v / k).toFixed(Math.min(dec, 7)); if (/^-0(\.0*)?$/.test(s)) s = s.slice(1); return s.replace('-', '−'); }), e };
+}
+function pathOf(xs, ys, X, Y) {
+  let d = '', pen = false;
+  for (let i = 0; i < xs.length; i++) {
+    const x = xs[i], y = ys[i];
+    if (x === null || y === null || !isFinite(x) || !isFinite(y)) { pen = false; continue; }
+    d += (pen ? 'L' : 'M') + X(x).toFixed(1) + ' ' + Y(y).toFixed(1); pen = true;
+  }
+  return d;
+}
+function dotsOf(xs, ys, X, Y) {          // zero-length segments with round caps: cheap dots
+  let d = '';
+  for (let i = 0; i < xs.length; i++) {
+    const x = xs[i], y = ys[i];
+    if (x === null || y === null || !isFinite(x) || !isFinite(y)) continue;
+    d += 'M' + X(x).toFixed(1) + ' ' + Y(y).toFixed(1) + 'h0.01';
+  }
+  return d;
+}
+// breaks lines where the window has a gap (a jump of more than 3 pixels)
+function withGaps(lam, ys) {
+  const st = lam.slice(1).map((v, i) => v - lam[i]).filter(isFinite).sort((a, b) => a - b);
+  const typ = st[st.length >> 1] || 1;
+  const X = [], Y = ys.map(() => []);
+  lam.forEach((v, i) => {
+    if (i > 0 && v - lam[i - 1] > 3 * typ) { X.push(null); Y.forEach(y => y.push(null)); }
+    X.push(v); ys.forEach((y, k) => Y[k].push(y ? y[i] : null));
+  });
+  return { x: X, y: Y };
+}
+let clipSeq = 0;
+/*
+ One plot area. o: { x, y, W, H, m:{l,r,t,b}, xlim, ylim, pad, series:[{x, y, color, width, opacity, dots, r, dash}],
+   xlabel, ylabel, noXLabels, hband:[y0, y1, fill], vbands:[{x0, x1, fill}], zero, P, fs }
+ Returns { svg, X, Y, inv, box }.
+*/
+function plot(o) {
+  const P = o.P || PAL[theme()], fs = o.fs || 11;
+  const m = o.m, ox = o.x || 0, oy = o.y || 0;
+  const L = ox + m.l, T = oy + m.t, iw = o.W - m.l - m.r, ih = o.H - m.t - m.b;
+  const [x0, x1] = o.xlim || extent(o.series.map(s => s.x));
+  let [y0, y1] = o.ylim || extent(o.series.map(s => s.y).concat(o.hband ? [[o.hband[0], o.hband[1]]] : []), o.pad ?? 0.07);
+  const X = v => L + (v - x0) / (x1 - x0) * iw, Y = v => T + ih - (v - y0) / (y1 - y0) * ih;
+  const inv = px => x0 + (px - L) / iw * (x1 - x0);
+  const id = 'c' + (++clipSeq);
+  let s = `<clipPath id="${id}"><rect x="${L}" y="${T}" width="${iw}" height="${ih}"/></clipPath>`;
+  const yt = ticks(y0, y1, Math.max(2, Math.round(ih / 42))), ytl = tickText(yt.t, yt.step);
+  const xt = ticks(x0, x1, Math.max(2, Math.round(iw / 90))), xtl = tickText(xt.t, xt.step);
+  yt.t.forEach((v, i) => {
+    const yy = Y(v).toFixed(1);
+    s += `<line x1="${L}" x2="${L + iw}" y1="${yy}" y2="${yy}" stroke="${P.grid}"/>`;
+    s += `<text x="${L - 7}" y="${yy}" dy="0.33em" text-anchor="end" fill="${P.muted}" font-size="${fs}">${ytl.labels[i]}</text>`;
+  });
+  if (ytl.e) s += `<text x="${L - 7}" y="${T - 5}" text-anchor="end" fill="${P.muted}" font-size="${fs - 0.5}">×10${sup(ytl.e)}</text>`;
+  s += `<line x1="${L}" x2="${L + iw}" y1="${T + ih}" y2="${T + ih}" stroke="${P.axis}"/>`;
+  xt.t.forEach((v, i) => {
+    const xx = X(v).toFixed(1);
+    s += `<line x1="${xx}" x2="${xx}" y1="${T + ih}" y2="${T + ih + 4}" stroke="${P.axis}"/>`;
+    if (!o.noXLabels) s += `<text x="${xx}" y="${T + ih + 7 + fs}" text-anchor="middle" fill="${P.muted}" font-size="${fs}">${xtl.labels[i]}</text>`;
+  });
+  s += `<g clip-path="url(#${id})">`;
+  for (const b of o.vbands || []) {
+    const a = Math.max(L, X(b.x0)), z = Math.min(L + iw, X(b.x1));
+    if (z > a) s += `<rect x="${a.toFixed(1)}" y="${T}" width="${(z - a).toFixed(1)}" height="${ih}" fill="${b.fill}"/>`;
+  }
+  if (o.hband) s += `<rect x="${L}" y="${Y(o.hband[1]).toFixed(1)}" width="${iw}" height="${Math.max(0, Y(o.hband[0]) - Y(o.hband[1])).toFixed(1)}" fill="${o.hband[2]}"/>`;
+  if (o.zero && y0 < 0 && y1 > 0) s += `<line x1="${L}" x2="${L + iw}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="${P.zero}" stroke-dasharray="3 3"/>`;
+  for (const se of o.series) {
+    const op = se.opacity ?? 1;
+    if (se.dots) s += `<path d="${dotsOf(se.x, se.y, X, Y)}" stroke="${se.color}" stroke-opacity="${op}" stroke-width="${2 * (se.r || 1.5)}" stroke-linecap="round" fill="none"/>`;
+    else s += `<path d="${pathOf(se.x, se.y, X, Y)}" fill="none" stroke="${se.color}" stroke-opacity="${op}" stroke-width="${se.width || 1.5}" stroke-linejoin="round"${se.dash ? ` stroke-dasharray="${se.dash}"` : ''}/>`;
+  }
+  s += '</g>';
+  if (o.xlabel) s += `<text x="${L + iw / 2}" y="${T + ih + 2 * fs + 12}" text-anchor="middle" fill="${P.muted}" font-size="${fs}">${esc(o.xlabel)}</text>`;
+  if (o.ylabel) s += `<text transform="translate(${ox + 12},${T + ih / 2}) rotate(-90)" text-anchor="middle" fill="${P.muted}" font-size="${fs}">${esc(o.ylabel)}</text>`;
+  return { svg: s, X, Y, inv, box: { L, T, iw, ih }, xlim: [x0, x1], ylim: [y0, y1] };
+}
+const svgOpen = (W, H, P, extra = '') =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="${FONT}"${extra}><rect width="${W}" height="${H}" fill="${P.bg}"/>`;
+
+// ----- the figures of one fit ------------------------------------------------
+function fitParts(win) {
+  const c = win.curves, g = withGaps(c.lambda, [c.od, c.model, c.residual]);
+  const lam = c.lambda.filter(v => v !== null);
+  const pad = (lam[lam.length - 1] - lam[0]) * 0.01;
+  return { c, g, xlim: [lam[0] - pad, lam[lam.length - 1] + pad] };
+}
+function odPanel(win, W, P, x = 0, y = 0, fs = 11) {
+  const { c, g, xlim } = fitParts(win);
+  const H1 = 232, H2 = 112;
+  const a = plot({ x, y, W, H: H1, m: { l: 62, r: 14, t: 14, b: 6 }, xlim, P, fs, noXLabels: true, ylabel: 'Differential optical density',
+    series: [{ x: g.x, y: g.y[0], dots: true, r: 1.6, color: P.meas, opacity: 0.9 }, { x: g.x, y: g.y[1], color: P.model, width: 2 }] });
+  const r = win.rms || 0;
+  const b = plot({ x, y: y + H1, W, H: H2 + 2 * fs + 30, m: { l: 62, r: 14, t: 22, b: 2 * fs + 16 }, xlim, P, fs, zero: true, hband: [-r, r, P.band],
+    ylabel: 'Residual', xlabel: 'Wavelength (nm)', series: [{ x: g.x, y: g.y[2], color: P.resid, width: 1.2 }] });
+  return { svg: a.svg + b.svg, H: H1 + H2 + 2 * fs + 30, a, b, g };
+}
+function speciesPanel(comp, lam, res, color, W, P, x = 0, y = 0, fs = 10.5, H = 168) {
+  const meas = comp.value.map((v, i) => v === null || res[i] === null ? null : v + res[i]);
+  const g = withGaps(lam, [meas, comp.value]);
+  const l2 = lam.filter(v => v !== null), pad = (l2[l2.length - 1] - l2[0]) * 0.01;
+  return plot({ x, y, W, H, m: { l: 56, r: 10, t: 16, b: 2 * fs + 16 }, P, fs, zero: true, xlim: [l2[0] - pad, l2[l2.length - 1] + pad],
+    xlabel: 'Wavelength (nm)', series: [{ x: g.x, y: g.y[0], dots: true, r: 1.35, color, opacity: 0.33 }, { x: g.x, y: g.y[1], color, width: 2 }] });
+}
+// The observed spectrum. The active window is drawn by the caller; the other windows are
+// brackets above the plot, stacked in rows so that overlapping windows never collide, and
+// the strip grows by one row for each extra row of brackets.
+function spectrumPanel(fit, W, P, active, x = 0, y = 0, fs = 11, H0 = 178) {
+  const o = fit.observed;
+  const pad = (o.lambda[o.lambda.length - 1] - o.lambda[0]) * 0.01;
+  const xlim = [o.lambda[0] - pad, o.lambda[o.lambda.length - 1] + pad];
+  const L = x + 62, iw = W - 62 - 14, X = v => L + (v - xlim[0]) / (xlim[1] - xlim[0]) * iw;
+  const others = [];
+  for (const w of fit.windows) {
+    if (w.name === active) continue;
+    const ws = winSettings(w.name), rng = ws ? [ws.lmin, ws.lmax] : w.curves.fit_range;
+    const a = X(rng[0]), z = X(rng[1]), c = (a + z) / 2;
+    const half = Math.max((z - a) / 2, 0.31 * (fs - 1) * w.name.length + 4);   // room for the label
+    others.push({ name: w.name, rng, a, z, s0: c - half - 6, s1: c + half + 6 });
+  }
+  others.sort((p, q) => p.s0 - q.s0);
+  const ends = [];                                  // right end of each row so far
+  for (const b of others) {
+    let k = ends.findIndex(e => e < b.s0);
+    if (k < 0) { k = ends.length; ends.push(0); }
+    ends[k] = b.s1; b.row = k;
+  }
+  const ROW = fs + 5, rows = ends.length, top = rows ? 8 + rows * ROW : 16, H = H0 + Math.max(0, rows - 1) * ROW;
+  const p = plot({ x, y, W, H, m: { l: 62, r: 14, t: top, b: 2 * fs + 16 }, xlim, P, fs, pad: 0.05, ylabel: 'Counts', xlabel: 'Wavelength (nm)',
+    series: [{ x: o.lambda, y: o.counts, color: P.obs, width: 1.1 }] });
+  let s = p.svg;
+  for (const b of others) {
+    const yy = p.box.T - 4 - b.row * ROW;           // bracket line; row 0 is nearest the plot
+    s += `<g class="wbr" data-w="${esc(b.name)}"><title>${esc(b.name)}: ${b.rng[0].toFixed(1)}–${b.rng[1].toFixed(1)} nm</title>` +
+         `<rect x="${b.s0.toFixed(1)}" y="${(yy - ROW + 2).toFixed(1)}" width="${(b.s1 - b.s0).toFixed(1)}" height="${ROW + 1}" fill="transparent"/>` +
+         `<path d="M${b.a.toFixed(1)} ${yy + 4}V${yy}H${b.z.toFixed(1)}v4" fill="none" stroke="${P.winOther}"/>` +
+         `<text x="${((b.a + b.z) / 2).toFixed(1)}" y="${yy - 3}" text-anchor="middle" fill="${P.muted}" font-size="${fs - 1}">${esc(b.name)}</text></g>`;
+  }
+  return { svg: s, p, xlim, H };
+}
+
+// =============================================================================
+// fit view
+// =============================================================================
+function renderFitPane() {
+  const el = $('#pane-fit');
+  if (!S.project) { el.innerHTML = welcomeHtml(); bindWelcome(el); return; }
+  if (!S.fit) {
+    el.innerHTML = `<div class="empty"><div style="font-size:15px;color:var(--text);font-weight:600;margin-bottom:6px">Select a spectrum and press <kbd>Enter</kbd></div>
+      Or double-click it. <kbd>↑</kbd> <kbd>↓</kbd> step through the spectra and fit each one.</div>`;
+    return;
+  }
+  const f = S.fit;
+  const wi = Math.max(0, f.windows.findIndex(w => w.name === S.fitWin));
+  const w = f.windows[wi];
+  S.fitWin = w ? w.name : null;
+  const rec = f.record || {};
+  const meta = [`${esc(f.date)} ${esc(f.time)} UTC`];
+  if (rec.elevation !== null && rec.elevation !== undefined) meta.push(`elevation ${num(rec.elevation)}°`);
+  if (rec.latitude !== null && rec.latitude !== undefined) meta.push(`${Math.abs(rec.latitude).toFixed(2)}°${rec.latitude >= 0 ? 'N' : 'S'} ${Math.abs(rec.longitude).toFixed(2)}°${rec.longitude >= 0 ? 'E' : 'W'}`);
+  meta.push(`fitted in ${(f.seconds * 1000).toFixed(f.seconds < 0.01 ? 1 : 0)} ms`);
+  el.innerHTML = `
+    ${S.fitError ? `<div class="banner">${esc(S.fitError)}</div>` : ''}
+    <div class="fit-head">
+      <div><div class="title">${esc(base(f.spectrum))}</div><div class="meta">${meta.map(m => `<span>${m}</span>`).join('')}</div></div>
+      <div class="wchips">${f.windows.map((x, i) => `<button class="wchip ${x.name === S.fitWin ? 'active' : ''}" data-w="${esc(x.name)}" title="${i < 9 ? 'Key ' + (i + 1) : ''}">${esc(x.name)}<span class="n">${i + 1}</span></button>`).join('')}</div>
+    </div>
+    <div class="fit-grid">
+      <div>
+        <div class="card"><div class="card-h"><h3>Spectrum</h3><span class="faint" style="font-size:12px">drag the shaded fit window, or its edges</span>
+          <div class="legend"><span><i style="border-color:${PAL[theme()].obs}"></i>observed</span><span><span class="swatch" style="background:${PAL[theme()].winFill};border:1px solid ${PAL[theme()].win}"></span>${esc(w.name)} fit window</span></div></div>
+          <div class="card-b fig" id="specFig"></div></div>
+        <div class="card"><div class="card-h"><h3>Fit — ${esc(w.name)}</h3>
+          <div class="legend"><span><i class="dot" style="background:${PAL[theme()].meas}"></i>measured</span><span><i style="border-color:${PAL[theme()].model}"></i>model</span><span><span class="swatch" style="background:${PAL[theme()].band}"></span>±RMS</span></div></div>
+          <div class="card-b fig" id="odFig"></div></div>
+        <div class="species-grid" id="speciesGrid"></div>
+      </div>
+      <div class="inspector" id="inspector"></div>
+    </div>`;
+  $$('.wchip', el).forEach(b => b.addEventListener('click', () => { S.fitWin = b.dataset.w; S.win = b.dataset.w; renderWindows(); renderFitPane(); }));
+  drawFitFigures();
+  renderInspector();
+}
+
+function drawFitFigures() {
+  const f = S.fit; if (!f || !$('#odFig')) return;
+  const w = f.windows.find(x => x.name === S.fitWin); if (!w) return;
+  const P = PAL[theme()];
+  // spectrum strip with the draggable fit window
+  const sEl = $('#specFig'), W1 = Math.max(320, sEl.clientWidth - 28);
+  const sp = spectrumPanel(f, W1, P, w.name);
+  sEl.innerHTML = svgOpen(W1, sp.H, P) + sp.svg + '<g id="winBand"></g><g class="hover"></g></svg><div class="tip"></div>';
+  $$('.wbr', sEl).forEach(g => g.addEventListener('click', () => { S.fitWin = S.win = g.dataset.w; renderWindows(); renderFitPane(); }));
+  bindWindowDrag(sEl, sp.p, w.name);
+  attachHover(sEl, sp.p, f.observed.lambda, [{ y: f.observed.counts, color: P.obs, label: 'counts' }]);
+  // optical density and residual
+  const oEl = $('#odFig'), W2 = Math.max(320, oEl.clientWidth - 28);
+  const od = odPanel(w, W2, P);
+  oEl.innerHTML = svgOpen(W2, od.H, P) + od.svg + '<g class="hover"></g></svg><div class="tip"></div>';
+  const c = w.curves;
+  attachHover(oEl, od.a, c.lambda, [{ y: c.od, color: P.meas, label: 'measured' }, { y: c.model, color: P.model, label: 'model' },
+                                   { y: c.residual, color: P.resid, label: 'residual', plot: od.b }]);
+  // one panel per absorber, and the polynomial
+  const grid = $('#speciesGrid');
+  const comps = c.components.map((x, i) => ({ ...x, color: speciesColor(x.name, i) }));
+  if (c.polynomial) comps.push({ name: 'Polynomial', value: c.polynomial, scd: null, err: null, color: P.poly, poly: true });
+  if (c.offset) comps.push({ name: 'Linear offset', value: c.offset, scd: null, err: null, color: P.poly, poly: true, offset: true });
+  grid.innerHTML = comps.map((x, i) => {
+    const rel = x.scd && x.err && x.err !== 1 ? Math.abs(x.err / x.scd) : null;
+    return `<div class="card"><div class="sp-h"><span class="swatch" style="background:${x.color}"></span><b>${esc(x.name)}</b>
+      ${x.poly ? `<span class="val muted">${x.offset ? 'order ' + (winSettings(w.name)?.w.linear_offset ?? '') : 'order ' + (winSettings(w.name)?.poly ?? '')}</span>` : `<span class="val">${pm(x.scd, x.err)}</span>`}
+      ${rel !== null ? `<span class="rel" title="relative error">${rel < 0.995 ? (100 * rel).toFixed(rel < 0.1 ? 1 : 0) + '%' : '>100%'}</span>` : ''}</div>
+      <div class="fig" data-i="${i}" style="padding:4px 6px 6px"></div></div>`;
+  }).join('');
+  $$('.fig', grid).forEach(el => {
+    const x = comps[+el.dataset.i], W = Math.max(240, el.clientWidth - 12);
+    const p = speciesPanel(x, c.lambda, c.residual, x.color, W, P);
+    el.innerHTML = svgOpen(W, 168, P) + p.svg + '<g class="hover"></g></svg><div class="tip"></div>';
+    attachHover(el, p, c.lambda, [{ y: x.value, color: x.color, label: x.name }]);
+  });
+}
+
+// crosshair and read-out under the mouse
+function attachHover(el, p, lam, series) {
+  const svg = $('svg', el), g = $('g.hover', el), tip = $('.tip', el);
+  if (!svg || !lam || !lam.length) return;
+  const idx = [...lam.keys()].filter(i => lam[i] !== null);
+  const move = ev => {
+    const r = svg.getBoundingClientRect(), sx = svg.viewBox.baseVal.width / r.width;
+    const px = (ev.clientX - r.left) * sx, py = (ev.clientY - r.top) * sx;
+    const bx = p.box;
+    if (px < bx.L || px > bx.L + bx.iw || py < bx.T - 10) { g.innerHTML = ''; tip.style.display = 'none'; return; }
+    const l = p.inv(px);
+    let lo = 0, hi = idx.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (lam[idx[mid]] < l) lo = mid; else hi = mid; }
+    const i = Math.abs(lam[idx[lo]] - l) < Math.abs(lam[idx[hi]] - l) ? idx[lo] : idx[hi];
+    const X = p.X(lam[i]);
+    const P = PAL[theme()];
+    let s = `<line x1="${X}" x2="${X}" y1="${bx.T}" y2="${(series.some(q => q.plot) ? series.find(q => q.plot).plot.box.T + series.find(q => q.plot).plot.box.ih : bx.T + bx.ih)}" stroke="${P.cross}" stroke-opacity="0.35"/>`;
+    let t = `<b>${lam[i].toFixed(2)} nm</b>`;
+    for (const q of series) {
+      const v = q.y[i]; if (v === null || v === undefined) continue;
+      const pp = q.plot || p;
+      s += `<circle cx="${X}" cy="${pp.Y(v)}" r="3.2" fill="${q.color}" stroke="${P.bg}" stroke-width="1.5"/>`;
+      t += `<br><span class="swatch" style="background:${q.color}"></span> ${esc(q.label)} ${num(v, 4)}`;
+    }
+    g.innerHTML = s;
+    tip.innerHTML = t; tip.style.display = 'block';
+    const er = el.getBoundingClientRect(), left = X / sx + (r.left - er.left), top = ev.clientY - er.top;
+    tip.style.left = (left + 14 + tip.offsetWidth > el.clientWidth ? left - tip.offsetWidth - 14 : left + 14) + 'px';
+    tip.style.top = Math.max(0, top - tip.offsetHeight / 2) + 'px';
+  };
+  svg.addEventListener('mousemove', move);
+  svg.addEventListener('mouseleave', () => { g.innerHTML = ''; tip.style.display = 'none'; });
+}
+
+// the fit window on the spectrum strip: drag its edges or the whole band
+function bindWindowDrag(el, p, wname) {
+  const svg = $('svg', el), band = $('#winBand', el), P = PAL[theme()];
+  const ws = winSettings(wname); if (!ws) return;
+  let cur = [ws.lmin, ws.lmax];
+  const draw = () => {
+    const a = p.X(cur[0]), z = p.X(cur[1]), T = p.box.T, H = p.box.ih;
+    band.innerHTML = `<rect x="${a}" y="${T}" width="${Math.max(1, z - a)}" height="${H}" fill="${P.winFill}" data-edge="move" style="cursor:grab"/>
+      <line x1="${a}" x2="${a}" y1="${T}" y2="${T + H}" stroke="${P.win}" stroke-width="1.5"/><line x1="${z}" x2="${z}" y1="${T}" y2="${T + H}" stroke="${P.win}" stroke-width="1.5"/>
+      <rect x="${a - 5}" y="${T}" width="10" height="${H}" fill="transparent" data-edge="min" style="cursor:ew-resize"/>
+      <rect x="${z - 5}" y="${T}" width="10" height="${H}" fill="transparent" data-edge="max" style="cursor:ew-resize"/>
+      <rect x="${a - 3}" y="${T + H / 2 - 12}" width="6" height="24" rx="3" fill="${P.win}" pointer-events="none"/>
+      <rect x="${z - 3}" y="${T + H / 2 - 12}" width="6" height="24" rx="3" fill="${P.win}" pointer-events="none"/>
+      <text x="${(a + z) / 2}" y="${T + 14}" text-anchor="middle" font-size="11" font-weight="600" fill="${P.win}" pointer-events="none">${cur[0].toFixed(1)} – ${cur[1].toFixed(1)} nm</text>`;
+  };
+  draw();
+  const toNm = ev => { const r = svg.getBoundingClientRect(); return p.inv((ev.clientX - r.left) * svg.viewBox.baseVal.width / r.width); };
+  band.addEventListener('pointerdown', ev => {
+    const edge = ev.target.dataset.edge; if (!edge) return;
+    ev.preventDefault();
+    const start = toNm(ev), orig = cur.slice(), [lo, hi] = p.xlim;
+    band.setPointerCapture(ev.pointerId);
+    const mv = e => {
+      const d = toNm(e) - start;
+      if (edge === 'min') cur[0] = clamp(orig[0] + d, lo, cur[1] - 2);
+      else if (edge === 'max') cur[1] = clamp(orig[1] + d, cur[0] + 2, hi);
+      else { const w = orig[1] - orig[0]; cur[0] = clamp(orig[0] + d, lo, hi - w); cur[1] = cur[0] + w; }
+      cur = cur.map(v => Math.round(v * 10) / 10);
+      draw();
+    };
+    const up = () => {
+      band.removeEventListener('pointermove', mv); band.removeEventListener('pointerup', up);
+      if (cur[0] !== orig[0] || cur[1] !== orig[1]) setEdits(wname, { lmin: cur[0], lmax: cur[1] });
+    };
+    band.addEventListener('pointermove', mv); band.addEventListener('pointerup', up);
+  });
+}
+
+function renderInspector() {
+  const el = $('#inspector'); if (!el || !S.fit) return;
+  const f = S.fit, w = f.windows.find(x => x.name === S.fitWin); if (!w) return;
+  const ws = winSettings(w.name), pw = ws.w;
+  const maxPoly = Math.max(6, pw.poly_order, ws.poly);
+  const polys = [-1]; for (let k = 0; k <= maxPoly; k++) polys.push(k);
+  const base0 = f.baseline && f.baseline[w.name];
+  const bterm = t => base0 && base0.terms.find(b => b.term === t);
+  const xsTerms = new Set(pw.xs.map(x => x.sym));
+  const rows = w.terms.filter(t => xsTerms.has(t.term)).map(t => {
+    const b = bterm(t.term);
+    const d = b && t.err ? (t.scd - b.scd) / t.err : null;
+    return `<tr><td><span class="swatch" style="background:${speciesColor(t.term, pw.xs.findIndex(x => x.sym === t.term))}"></span> ${esc(t.term)}</td>
+      <td>${pm(t.scd, t.err)}</td>${base0 ? `<td class="delta ${d !== null && Math.abs(d) >= 1 ? 'big' : ''}" title="change from the project's settings, in units of the error">${d === null ? '–' : (d >= 0 ? '+' : '−') + Math.abs(d).toFixed(2) + 'σ'}</td>` : ''}</tr>`;
+  }).join('');
+  const shifts = w.shifts.filter(s => s.err !== 1 || s.shift !== 0).map(s => `<tr><td>${esc(s.sym)}</td><td>${s.err === 1 ? num(s.shift, 4) + ' nm, fixed' : pm(s.shift, s.err, 2) + ' nm'}</td></tr>
+      ${s.stretch_err !== null && s.stretch_err !== 1 ? `<tr><td class="faint">stretch</td><td>${pm(s.stretch, s.stretch_err, 2)}</td></tr>` : ''}`).join('');
+  el.innerHTML = `
+    <div class="card"><div class="card-h"><h3>Fit window</h3>
+        <label class="switch" title="Fit again as soon as a setting changes"><input type="checkbox" id="liveT" ${S.live ? 'checked' : ''}>live refit</label></div>
+      <div class="card-b">
+        <div class="field-row"><label>Interval</label>
+          <input type="number" id="insMin" step="0.1" value="${ws.lmin}"> <span class="faint">to</span>
+          <input type="number" id="insMax" step="0.1" value="${ws.lmax}"> <span class="faint">nm</span></div>
+        <div class="field-row"><label>Polynomial</label><div class="seg" id="insPoly">${polys.map(k => `<button data-k="${k}" class="${k === ws.poly ? 'on' : ''}">${k < 0 ? 'none' : k}</button>`).join('')}</div></div>
+        <div class="field-row" style="align-items:flex-start"><label style="padding-top:3px">Absorbers</label><div class="xs-chips grow">${pw.xs.map((x, i) =>
+          `<button class="xs-chip ${ws.exclude.has(x.sym) ? 'off' : ''}" data-sym="${esc(x.sym)}" title="${ws.exclude.has(x.sym) ? 'Put back into the fit' : 'Leave out of the fit'}"><span class="swatch" style="background:${speciesColor(x.sym, i)}"></span>${esc(x.sym)}</button>`).join('')}</div></div>
+        <div class="field-row" style="margin-top:14px">
+          <button class="btn small" id="insUndo" ${S.history.length ? '' : 'disabled'} title="Undo (Ctrl+Z)">Undo</button>
+          <button class="btn small" id="insRedo" ${S.future.length ? '' : 'disabled'} title="Redo (Ctrl+Shift+Z)">Redo</button>
+          <button class="btn small" id="insReset" ${S.edits[w.name] ? '' : 'disabled'}>Reset window</button>
+          ${S.live ? '' : '<button class="btn small primary" id="insFit">Fit ↵</button>'}
+        </div>
+        <p class="hint"><kbd>[</kbd> <kbd>]</kbd> move the start, <kbd>Shift</kbd>+<kbd>[</kbd> <kbd>]</kbd> the end by 0.5 nm; <kbd>,</kbd> <kbd>.</kbd> change the polynomial.
+          <b>Save as…</b> writes the edits to a new project file.</p>
+      </div></div>
+    <div class="card"><div class="card-b">
+      <div class="stats"><div><small>RMS</small><b>${num(w.rms, 3)}</b></div><div><small>χ²</small><b>${num(w.chi2, 3)}</b></div><div><small>Iterations</small><b>${w.iterations}</b></div></div>
+      <table style="margin-top:10px"><thead><tr><th>Absorber</th><th>Slant column</th>${base0 ? '<th title="Change from the fit with the project’s own settings">Δ project</th>' : ''}</tr></thead><tbody>${rows}</tbody></table>
+      ${shifts ? `<table style="margin-top:8px"><thead><tr><th>Shift</th><th>Value</th></tr></thead><tbody>${shifts}</tbody></table>` : ''}
+      ${w.offsets.length ? `<table style="margin-top:8px"><thead><tr><th>Offset</th><th>Value</th></tr></thead><tbody>${w.offsets.map(o => `<tr><td>${esc(o.name)}</td><td>${pm(o.value, o.err)}</td></tr>`).join('')}</tbody></table>` : ''}
+      <p class="hint" style="margin-top:8px">Slant columns in the units of the cross sections (molecules/cm² for cm²/molecule). ${base0 ? `With the project's settings: RMS ${num(base0.rms, 3)}.` : ''}</p>
+    </div></div>`;
+  $('#liveT').addEventListener('change', e => { S.live = e.target.checked; setPref('live', S.live); renderInspector(); if (S.live) fitSelected(); });
+  const setRange = () => {
+    const a = parseFloat($('#insMin').value), b = parseFloat($('#insMax').value);
+    if (isFinite(a) && isFinite(b) && b - a >= 1) setEdits(w.name, { lmin: a, lmax: b });
+    else toast('The fitting interval must be at least 1 nm wide', 'bad');
+  };
+  $('#insMin').addEventListener('change', setRange); $('#insMax').addEventListener('change', setRange);
+  $$('#insPoly button').forEach(b => b.addEventListener('click', () => setEdits(w.name, { poly_order: +b.dataset.k })));
+  $$('.xs-chip', el).forEach(b => b.addEventListener('click', () => toggleXs(w.name, b.dataset.sym)));
+  $('#insUndo').addEventListener('click', undo); $('#insRedo').addEventListener('click', redo);
+  $('#insReset').addEventListener('click', () => resetWindow(w.name));
+  $('#insFit') && $('#insFit').addEventListener('click', () => fitSelected());
+}
+
+// =============================================================================
+// edits: every change goes through setEdits / toggleXs / resetWindow (undoable)
+// =============================================================================
+function snapshot() { S.history.push(JSON.stringify(S.edits)); if (S.history.length > 200) S.history.shift(); S.future = []; }
+function normaliseEdits() {
+  for (const [name, e] of Object.entries(S.edits)) {
+    const w = projWin(name); if (!w) { delete S.edits[name]; continue; }
+    if (e.enabled === true) delete e.enabled;
+    if (e.lmin !== undefined && Math.abs(e.lmin - w.lmin) < 1e-9) delete e.lmin;
+    if (e.lmax !== undefined && Math.abs(e.lmax - w.lmax) < 1e-9) delete e.lmax;
+    if (e.poly_order !== undefined && e.poly_order === w.poly_order) delete e.poly_order;
+    if (e.exclude && !e.exclude.length) delete e.exclude;
+    if (!Object.keys(e).length) delete S.edits[name];
+  }
+}
+function setEdits(name, kv) { snapshot(); S.edits[name] = Object.assign(S.edits[name] || {}, kv); editsChanged(); }
+function toggleXs(name, sym) {
+  snapshot();
+  const e = S.edits[name] || (S.edits[name] = {}), ex = new Set(e.exclude || []);
+  ex.has(sym) ? ex.delete(sym) : ex.add(sym); e.exclude = [...ex];
+  editsChanged();
+}
+function resetWindow(name) { if (!S.edits[name]) return; snapshot(); delete S.edits[name]; editsChanged(); }
+function undo() { if (!S.history.length) return; S.future.push(JSON.stringify(S.edits)); S.edits = JSON.parse(S.history.pop()); editsChanged(); }
+function redo() { if (!S.future.length) return; S.history.push(JSON.stringify(S.edits)); S.edits = JSON.parse(S.future.pop()); editsChanged(); }
+const refitSoon = debounce(() => fitSelected({ quiet: true }), 90);
+function editsChanged() {
+  normaliseEdits();
+  $('#editedPill').classList.toggle('hidden', !hasEdits());
+  renderWindows();
+  if (S.tab === 'project') renderProjectPane();
+  if (S.live && S.fit && S.selected) refitSoon(); else renderInspector();
+  S.status = {}; renderSpectra(); refreshResults();
+  if (S.tab === 'lab') renderLab();
+}
+
+// =============================================================================
+// project, windows, spectra
+// =============================================================================
+async function loadProject(path) {
+  activity('Reading ' + base(path) + '…');
+  try {
+    const p = await api('/api/project', { path });
+    setProject(p);
+    toast(`Opened ${p.name}: ${p.windows.length} analysis window${p.windows.length === 1 ? '' : 's'}, ${p.spectra.length} spectra`, 'good');
+    return true;
+  } catch (e) { toast('Cannot use this project:\n' + e.message, 'bad'); return false; }
+  finally { activity(''); }
+}
+function setProject(p) {
+  Object.assign(S, { project: p, spectra: p.spectra.slice(), fromFolder: '', edits: {}, history: [], future: [], status: {},
+                     fit: null, fitWin: null, fitError: '', results: null, map: null, mapCell: null });
+  S.selected = S.spectra[0] || null;
+  S.win = p.windows.length ? p.windows[0].name : null;
+  $('#projName').textContent = p.name;
+  $('#projPath').textContent = '‎' + tilde(p.path); $('#projBox').title = p.path;
+  $('#saveBtn').disabled = false;
+  $('#editedPill').classList.add('hidden');
+  const rec = pref('recent', []).filter(x => x !== p.path); rec.unshift(p.path); setPref('recent', rec.slice(0, 8));
+  renderWindows(); renderSpectra(); renderAll();
+  refreshResults();
+}
+function renderWindows() {
+  const el = $('#winList');
+  if (!S.project) return;
+  el.innerHTML = S.project.windows.map((w, i) => {
+    const ws = winSettings(w.name);
+    return `<div class="winrow ${S.win === w.name ? 'sel' : ''}" data-w="${esc(w.name)}">
+      <input type="checkbox" ${ws.enabled ? 'checked' : ''} title="Use this window">
+      <span class="nm">${esc(w.name)}</span>${S.edits[w.name] ? '<span class="edited" title="edited"></span>' : ''}
+      <span class="rng">${ws.lmin.toFixed(1)}–${ws.lmax.toFixed(1)} nm</span></div>`;
+  }).join('');
+}
+$('#winList').addEventListener('click', e => {
+  const row = e.target.closest('.winrow'); if (!row) return;
+  const name = row.dataset.w;
+  if (e.target.matches('input')) { setEdits(name, { enabled: e.target.checked }); return; }
+  S.win = name; renderWindows();
+  if (S.fit && S.fit.windows.some(w => w.name === name)) { S.fitWin = name; if (S.tab === 'fit') renderFitPane(); }
+  if (S.tab === 'project') renderProjectPane();
+  if (S.tab === 'lab') renderLab();
+});
+
+function globRx(f) {
+  if (!f) return null;
+  try { return new RegExp('^' + f.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i'); } catch (e) { return null; }
+}
+function renderSpectra() {
+  const el = $('#specList');
+  const f = $('#specFilter').value.trim();
+  const rx = globRx(f.includes('*') || f.includes('?') ? f : f ? `*${f}*` : '');
+  const shown = S.spectra.filter(p => !rx || rx.test(base(p)));
+  S.shown = shown;
+  $('#specCount').textContent = S.spectra.length ? (shown.length !== S.spectra.length ? `${shown.length} of ${S.spectra.length}` : `${shown.length}`) : '';
+  $('#specSrc').innerHTML = S.fromFolder ? `<a href="#" id="backToProj" title="${esc(S.fromFolder)}">folder · use project's</a>` : '';
+  if ($('#backToProj')) $('#backToProj').onclick = e => { e.preventDefault(); S.spectra = S.project.spectra.slice(); S.fromFolder = ''; renderSpectra(); };
+  const limit = 5000;
+  el.innerHTML = shown.slice(0, limit).map(p =>
+    `<div class="spec ${p === S.selected ? 'sel' : ''} ${S.status[p] || ''}" data-p="${esc(p)}" title="${esc(p)}"><span class="dot"></span><span class="nm">${esc(base(p))}</span></div>`).join('') +
+    (shown.length > limit ? `<div class="faint" style="padding:6px 8px">${shown.length - limit} more; narrow the filter</div>` : '') +
+    (!shown.length && S.project ? `<div class="faint" style="padding:6px 8px">${S.spectra.length ? 'No spectrum matches the filter' : 'The project lists no spectra; choose a folder'}</div>` : '');
+  $('#fitBtn').disabled = !S.selected;
+  $('#batchBtn').disabled = !shown.length;
+}
+// selecting only moves the highlight (rebuilding the list between the two clicks of a
+// double-click would put them on different elements and the browser would drop it)
+function markSelected(p, scroll = false) {
+  S.selected = p;
+  $$('#specList .spec').forEach(x => {
+    const on = x.dataset.p === p;
+    x.classList.toggle('sel', on);
+    if (on && scroll) x.scrollIntoView({ block: 'nearest' });
+  });
+  $('#fitBtn').disabled = !S.selected;
+}
+$('#specList').addEventListener('click', e => { const d = e.target.closest('.spec'); if (d) markSelected(d.dataset.p); });
+$('#specList').addEventListener('dblclick', e => { const d = e.target.closest('.spec'); if (d) { markSelected(d.dataset.p); showTab('fit'); fitSelected(); } });
+$('#specFilter').addEventListener('input', debounce(renderSpectra, 120));
+$('#specFilter').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 'Escape') { e.target.blur(); } });
+function step(d) {
+  const list = S.shown; if (!list.length) return;
+  let i = list.indexOf(S.selected);
+  i = i < 0 ? 0 : clamp(i + d, 0, list.length - 1);
+  markSelected(list[i], true);
+  if (S.tab === 'fit' || S.tab === 'lab') fitSelected({ quiet: true });
+}
+$$('[data-nav]').forEach(b => b.addEventListener('click', () => step(+b.dataset.nav)));
+
+// =============================================================================
+// fitting
+// =============================================================================
+async function fitSelected({ quiet = false } = {}) {
+  if (!S.selected || !S.project) return;
+  const seq = ++S.fitSeq, spec = S.selected;
+  activity('Fitting ' + base(spec) + '…');
+  try {
+    const r = await api('/api/analyze', { spectrum: spec, edits: sentEdits(), baseline: hasEdits() });
+    if (seq !== S.fitSeq) return;
+    S.fit = r; S.fitError = '';
+    if (!r.windows.some(w => w.name === S.fitWin)) S.fitWin = (r.windows.find(w => w.name === S.win) || r.windows[0] || {}).name;
+    S.status[spec] = 'ok';
+  } catch (e) {
+    if (seq !== S.fitSeq) return;
+    S.status[spec] = 'failed';
+    if (S.fit && S.fit.spectrum === spec) S.fitError = e.message; else { S.fitError = ''; }
+    if (!quiet || !S.fit || S.fit.spectrum !== spec) toast(base(spec) + ': ' + e.message, 'bad');
+  } finally { if (seq === S.fitSeq) activity(''); }
+  $$('#specList .spec').forEach(x => { if (x.dataset.p === spec) { x.classList.remove('ok', 'failed'); if (S.status[spec]) x.classList.add(S.status[spec]); } });
+  if (S.tab === 'fit') renderFitPane();
+  if (S.tab === 'lab') renderLab();
+  refreshResults();
+}
+$('#fitBtn').addEventListener('click', () => { showTab('fit'); fitSelected(); });
+
+// =============================================================================
+// results: everything analysed with the current settings (single fits and batches)
+// =============================================================================
+async function loadResults() {
+  if (!S.project) return;
+  try {
+    const r = await api('/api/results', { edits: sentEdits() });
+    S.results = r;
+    const st = {};
+    r.rows.forEach(row => st[row[0]] = row[4] === 'ok' ? 'ok' : 'failed');
+    S.status = st;
+    $$('#specList .spec').forEach(x => { x.classList.remove('ok', 'failed'); if (st[x.dataset.p]) x.classList.add(st[x.dataset.p]); });
+    $('#resCount').textContent = r.rows.length ? `${r.rows.length} spectr${r.rows.length === 1 ? 'um' : 'a'} analysed with the current settings` : '';
+    if (S.tab === 'results') renderResults();
+  } catch (e) { console.error(e); }
+}
+const refreshResults = debounce(loadResults, 250);
+
+let batchPoll = null;
+async function runBatch() {
+  if (!S.project) return;
+  const files = S.shown.length ? S.shown : S.spectra;
+  if (!files.length) return;
+  try { await api('/api/batch', { spectra: files, edits: sentEdits() }); }
+  catch (e) { toast(e.message, 'bad'); return; }
+  showTab('results');
+  S.batch = { running: true, done: 0, total: files.length, seconds: 0 };
+  renderResults();
+  clearInterval(batchPoll);
+  let ticks = 0;
+  batchPoll = setInterval(async () => {
+    let st;
+    try { st = await api('/api/batch'); } catch (e) { return; }
+    S.batch = st;
+    const bar = $('#batchBar');
+    if (bar) { bar.style.width = (100 * st.done / Math.max(1, st.total)) + '%'; $('#batchText').textContent = `${st.done} / ${st.total} · ${st.seconds.toFixed(1)} s`; }
+    activity(st.running ? `Analysing ${st.done}/${st.total}…` : '');
+    if (++ticks % 4 === 0 && st.running) refreshResults();
+    if (!st.running) {
+      clearInterval(batchPoll);
+      S.batch = null;
+      await loadResults();
+      if (st.error) toast(st.error === 'cancelled' ? 'Batch cancelled' : st.error, st.error === 'cancelled' ? '' : 'bad');
+      else toast(`${st.total} spectra in ${st.seconds.toFixed(2)} s (${(st.total / Math.max(st.seconds, 1e-9)).toFixed(0)} per second)`, 'good');
+      if (S.tab === 'results') renderResults();
+    }
+  }, 350);
+}
+$('#batchBtn').addEventListener('click', runBatch);
+
+function resultColumns(h) {             // the plottable quantities, and their error columns
+  return h.map((c, i) => ({ c, i })).filter(x => x.c.includes('.') && !/\.(SlErr\(|Err )/.test(x.c) && !/\.Err /.test(x.c));
+}
+function errorColumn(h, col) {
+  const cands = [col.replace('.SlCol(', '.SlErr('), col.replace(/\.(Shift|Stretch)\(/, '.Err $1('), col.replace(/\.([^.]+)$/, '.Err $1')];
+  for (const c of cands) if (c !== col) { const i = h.indexOf(c); if (i >= 0) return i; }
+  return -1;
+}
+const ELEV_COLORS = ['#1d4ed8', '#0891b2', '#059669', '#65a30d', '#ca8a04', '#ea580c', '#dc2626', '#db2777', '#9333ea', '#4f46e5', '#0f766e', '#64748b', '#78350f'];
+function renderResults() {
+  const el = $('#pane-results');
+  if (!S.project) { el.innerHTML = '<div class="empty">Open a project first.</div>'; return; }
+  const R = S.results, B = S.batch;
+  const prog = B && B.running !== false ? `<div class="card" style="margin-bottom:14px"><div class="card-b" style="display:flex;gap:12px;align-items:center">
+      <b>Analysing ${B.total} spectra</b><div class="progress"><div id="batchBar" style="width:${100 * B.done / Math.max(1, B.total)}%"></div></div>
+      <span class="faint" id="batchText">${B.done} / ${B.total}</span><button class="btn small" id="cancelBatch">Cancel</button></div></div>` : '';
+  if (!R || !R.rows.length) {
+    el.innerHTML = prog + `<div class="empty">Nothing analysed yet with the current settings.<br><br>
+      <button class="btn primary" id="runAll2">Run all listed spectra <span class="kbdhint">Ctrl ↵</span></button></div>`;
+    $('#runAll2') && $('#runAll2').addEventListener('click', runBatch);
+    $('#cancelBatch') && $('#cancelBatch').addEventListener('click', () => api('/api/cancel', { job: 'batch' }));
+    return;
+  }
+  const h = R.header, qs = resultColumns(h);
+  if (!S.resultsCol || !h.includes(S.resultsCol)) {
+    const prefer = qs.find(q => /SlCol\((NO2|SO2|O3|O4|BrO|HCHO)\)/.test(q.c)) || qs.find(q => /SlCol\((?!x\d|offl)/.test(q.c)) || qs[0];
+    S.resultsCol = prefer ? prefer.c : null;
+  }
+  const hasElev = h.includes('elevation');
+  const groups = {};
+  qs.forEach(q => { const [w] = q.c.split('.'); (groups[w] = groups[w] || []).push(q.c); });
+  const ok = R.rows.filter(r => r[4] === 'ok').length;
+  el.innerHTML = prog + `
+    <div class="card"><div class="card-h"><h3>${R.rows.length} spectra</h3><span class="muted">${ok} analysed, ${R.rows.length - ok} failed · current settings${hasEdits() ? ' (edited)' : ''}</span>
+      <span class="grow"></span>
+      <select id="resCol" title="Quantity">${Object.entries(groups).map(([g, cs]) => `<optgroup label="${esc(g)}">${cs.map(c => `<option value="${esc(c)}" ${c === S.resultsCol ? 'selected' : ''}>${esc(c.slice(g.length + 1))}</option>`).join('')}</optgroup>`).join('')}</select>
+      <select id="resX" title="Horizontal axis"><option value="time" ${S.resultsX === 'time' ? 'selected' : ''}>vs time</option>${hasElev ? `<option value="elevation" ${S.resultsX === 'elevation' ? 'selected' : ''}>vs elevation</option>` : ''}<option value="index" ${S.resultsX === 'index' ? 'selected' : ''}>vs spectrum no.</option></select>
+      ${hasElev ? `<select id="resColor" title="Colour"><option value="elevation" ${S.colorBy === 'elevation' ? 'selected' : ''}>colour: elevation</option><option value="none" ${S.colorBy === 'none' ? 'selected' : ''}>colour: none</option></select>` : ''}
+      <button class="btn small" id="resCsv" title="Ctrl+E"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Export CSV</button>
+      <button class="btn small" id="resRun">Run all</button></div>
+      <div class="card-b"><div id="resLegend" class="legend" style="margin:0 0 6px;flex-wrap:wrap;justify-content:flex-end"></div><div class="fig" id="resFig"></div></div></div>
+    <div class="card"><div class="table-wrap" id="resTable"></div></div>`;
+  $('#resCol').addEventListener('change', e => { S.resultsCol = e.target.value; renderResults(); });
+  $('#resX').addEventListener('change', e => { S.resultsX = e.target.value; renderResults(); });
+  $('#resColor') && $('#resColor').addEventListener('change', e => { S.colorBy = e.target.value; renderResults(); });
+  $('#resCsv').addEventListener('click', exportCsvAll);
+  $('#resRun').addEventListener('click', runBatch);
+  $('#cancelBatch') && $('#cancelBatch').addEventListener('click', () => api('/api/cancel', { job: 'batch' }));
+  drawResultsChart();
+  // table: file, time, elevation, status, then the columns of the chosen window
+  const [wname] = (S.resultsCol || '').split('.');
+  const cols = [0, 3].concat(hasElev ? [h.indexOf('elevation')] : [], [4], h.map((c, i) => c.startsWith(wname + '.') ? i : -1).filter(i => i >= 0));
+  const rows = R.rows.slice(0, 3000);
+  $('#resTable').innerHTML = `<table><thead><tr>${cols.map(i => `<th title="${esc(h[i])}">${esc(h[i].startsWith(wname + '.') ? h[i].slice(wname.length + 1) : h[i])}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr data-p="${esc(r[0])}" class="${r[0] === S.selected ? 'sel' : ''}">${cols.map(i => {
+      const v = r[i];
+      if (i === 0) return `<td class="mono">${esc(base(v))}</td>`;
+      if (i === 4) return `<td>${v === 'ok' ? '<span class="pill ok">ok</span>' : `<span class="pill bad" title="${esc(r[5])}">failed</span>`}</td>`;
+      return `<td>${typeof v === 'number' ? num(v, 4) : esc(v ?? '')}</td>`;
+    }).join('')}</tr>`).join('')}</tbody></table>${R.rows.length > rows.length ? `<div class="faint" style="padding:8px">Showing 3000 of ${R.rows.length}; the CSV has all.</div>` : ''}`;
+  $('#resTable tbody').addEventListener('click', e => {
+    const tr = e.target.closest('tr'); if (!tr) return;
+    markSelected(tr.dataset.p, true); showTab('fit'); fitSelected();
+  });
+}
+function drawResultsChart() {
+  const el = $('#resFig'); if (!el || !S.results) return;
+  const R = S.results, h = R.header, iy = h.indexOf(S.resultsCol); if (iy < 0) return;
+  const ie = errorColumn(h, S.resultsCol), iel = h.indexOf('elevation');
+  const P = PAL[theme()];
+  const pts = [];
+  let day0 = null;
+  R.rows.forEach((r, k) => {
+    if (r[4] !== 'ok' || r[iy] === null) return;
+    const [hh, mm, ss] = (r[3] || '0:0:0').split(':').map(Number);
+    const d = Date.parse((r[2] || '1970-01-01') + 'T00:00:00Z') / 1000;
+    const t = d + hh * 3600 + mm * 60 + ss;
+    if (day0 === null || d < day0) day0 = d;
+    pts.push({ t, y: r[iy], e: ie >= 0 ? r[ie] : null, el: iel >= 0 ? r[iel] : null, file: r[0], k });
+  });
+  if (!pts.length) { el.innerHTML = '<div class="empty" style="padding:30px">No values.</div>'; return; }
+  const sameDay = pts.every(p => p.t - day0 < 86400);
+  pts.forEach(p => p.x = S.resultsX === 'elevation' ? p.el : S.resultsX === 'index' ? p.k + 1 : (p.t - day0) / 3600);
+  const xl = S.resultsX === 'elevation' ? 'Elevation angle (°)' : S.resultsX === 'index' ? 'Spectrum' : sameDay ? `Time (UTC hours), ${new Date(day0 * 1000).toISOString().slice(0, 10)}` : 'Hours since the first day';
+  const colorOf = {};
+  let legend = '';
+  if (iel >= 0 && S.colorBy === 'elevation') {
+    const els = [...new Set(pts.map(p => p.el))].sort((a, b) => a - b);
+    els.forEach((v, i) => colorOf[v] = ELEV_COLORS[i % ELEV_COLORS.length]);
+    legend = els.map(v => `<span><span class="swatch" style="background:${colorOf[v]}"></span>${num(v)}°</span>`).join('');
+  }
+  $('#resLegend').innerHTML = legend;
+  const col = p => colorOf[p.el] || P.model;
+  const W = Math.max(360, el.clientWidth - 28), H = 330;
+  const lo = pts.map(p => p.e ? p.y - p.e : p.y), hi = pts.map(p => p.e ? p.y + p.e : p.y);
+  const xs = pts.map(p => p.x);
+  const pl = plot({ W, H, m: { l: 66, r: 14, t: 14, b: 42 }, P, pad: 0.06, zero: true, xlim: extent([xs], 0.03), ylim: extent([lo, hi], 0.06),
+    xlabel: xl, ylabel: S.resultsCol.split('.').slice(1).join('.'), series: [] });
+  let s = pl.svg;
+  const byColor = {};
+  pts.forEach(p => { const c = col(p); (byColor[c] = byColor[c] || []).push(p); });
+  for (const [c, ps] of Object.entries(byColor)) {
+    let d = '';
+    for (const p of ps) if (p.e) d += `M${pl.X(p.x).toFixed(1)} ${pl.Y(p.y - p.e).toFixed(1)}V${pl.Y(p.y + p.e).toFixed(1)}`;
+    if (d) s += `<path d="${d}" stroke="${c}" stroke-opacity="0.45" stroke-width="1.2"/>`;
+    s += `<path d="${ps.map(p => `M${pl.X(p.x).toFixed(1)} ${pl.Y(p.y).toFixed(1)}h0.01`).join('')}" stroke="${c}" stroke-width="6.5" stroke-linecap="round"/>`;
+  }
+  el.innerHTML = svgOpen(W, H, P) + s + '<g class="hover"></g></svg><div class="tip"></div>';
+  const svg = $('svg', el), g = $('g.hover', el), tip = $('.tip', el);
+  const near = ev => {
+    const r = svg.getBoundingClientRect(), k = W / r.width, px = (ev.clientX - r.left) * k, py = (ev.clientY - r.top) * k;
+    let best = null, bd = 144;
+    for (const p of pts) { const d = (pl.X(p.x) - px) ** 2 + (pl.Y(p.y) - py) ** 2; if (d < bd) { bd = d; best = p; } }
+    return { best, k };
+  };
+  svg.addEventListener('mousemove', ev => {
+    const { best, k } = near(ev);
+    if (!best) { g.innerHTML = ''; tip.style.display = 'none'; svg.style.cursor = ''; return; }
+    svg.style.cursor = 'pointer';
+    g.innerHTML = `<circle cx="${pl.X(best.x)}" cy="${pl.Y(best.y)}" r="6" fill="none" stroke="${P.cross}" stroke-width="1.5"/>`;
+    tip.innerHTML = `<b>${esc(base(best.file))}</b><br>${esc(S.resultsCol.split('.').slice(1).join('.'))}: ${pm(best.y, best.e)}${best.el !== null ? `<br>elevation ${num(best.el)}°` : ''}<br><span class="faint">click to open the fit</span>`;
+    tip.style.display = 'block';
+    const r = svg.getBoundingClientRect(), er = el.getBoundingClientRect();
+    const x = pl.X(best.x) / k + (r.left - er.left), y = pl.Y(best.y) / k + (r.top - er.top);
+    tip.style.left = (x + 16 + tip.offsetWidth > el.clientWidth ? x - tip.offsetWidth - 10 : x + 16) + 'px';
+    tip.style.top = Math.max(0, y - 20) + 'px';
+  });
+  svg.addEventListener('mouseleave', () => { g.innerHTML = ''; tip.style.display = 'none'; });
+  svg.addEventListener('click', ev => { const { best } = near(ev); if (best) { markSelected(best.file, true); showTab('fit'); fitSelected(); } });
+}
+
+// =============================================================================
+// fit window map (retrieval interval mapping, Vogel et al. 2013)
+// =============================================================================
+const VIRIDIS = ['#440154', '#482878', '#3e4989', '#31688e', '#26828e', '#1f9e89', '#35b779', '#6ece58', '#b5de2b', '#fde725'];
+function viridis(t) {
+  t = clamp(t, 0, 1) * (VIRIDIS.length - 1);
+  const i = Math.min(VIRIDIS.length - 2, Math.floor(t)), f = t - i;
+  const a = VIRIDIS[i], b = VIRIDIS[i + 1];
+  const c = k => Math.round(parseInt(a.slice(k, k + 2), 16) * (1 - f) + parseInt(b.slice(k, k + 2), 16) * f);
+  return `rgb(${c(1)},${c(3)},${c(5)})`;
+}
+function mapValue(cell, q) {
+  if (!cell || cell.error) return null;
+  const [kind, sym] = q.split(':');
+  if (kind === 'rms') return cell.rms;
+  if (kind === 'chi2') return cell.chi2;
+  if (kind === 'iterations') return cell.iterations;
+  const v = cell.scd[sym], e = cell.err[sym];
+  if (kind === 'scd') return v;
+  if (kind === 'err') return e;
+  if (kind === 'rel') return v ? Math.abs(e / v) : null;
+  return null;
+}
+function renderLab() {
+  const el = $('#pane-lab');
+  if (!S.project) { el.innerHTML = '<div class="empty">Open a project first.</div>'; return; }
+  const wname = S.win && projWin(S.win) ? S.win : S.project.windows[0].name;
+  const ws = winSettings(wname);
+  const lamR = S.fit ? [S.fit.observed.lambda[0], S.fit.observed.lambda[S.fit.observed.lambda.length - 1]] : [ws.lmin - 20, ws.lmax + 20];
+  const saved = S.labCfg && S.labCfg.window === wname ? S.labCfg : null;
+  const r1 = v => Math.round(v * 10) / 10;
+  const cfg = saved || { window: wname, a0: r1(Math.max(lamR[0], ws.lmin - 8)), a1: r1(ws.lmin + 8), b0: r1(ws.lmax - 8), b1: r1(Math.min(lamR[1], ws.lmax + 8)), step: 1, minw: 5 };
+  S.labCfg = cfg;
+  const job = S.mapJob;
+  const syms = ws.w.xs.map(x => x.sym).filter(s => !ws.exclude.has(s));
+  if (!S.mapQty || (S.mapQty.includes(':') && !syms.includes(S.mapQty.split(':')[1]))) S.mapQty = 'scd:' + (syms[0] || '');
+  const ncell = (() => { let n = 0; for (let a = cfg.a0; a <= cfg.a1 + 1e-9; a += cfg.step) for (let b = cfg.b0; b <= cfg.b1 + 1e-9; b += cfg.step) if (b - a >= cfg.minw) n++; return n; })();
+  el.innerHTML = `
+    <div class="card"><div class="card-h"><h3>Fit window map</h3><span class="muted">Fits one window to the selected spectrum for every start and end wavelength on a grid, in parallel.</span></div>
+      <div class="card-b"><div class="controls">
+        <label class="ctl">Window<select id="labWin">${S.project.windows.map(w => `<option ${w.name === wname ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select></label>
+        <label class="ctl">Spectrum<span class="mono" style="height:30px;display:flex;align-items:center;color:var(--text)">${esc(S.selected ? base(S.selected) : '—')}</span></label>
+        <label class="ctl">Start (nm)<span class="pair"><input type="number" step="0.5" id="labA0" value="${cfg.a0}">to<input type="number" step="0.5" id="labA1" value="${cfg.a1}"></span></label>
+        <label class="ctl">End (nm)<span class="pair"><input type="number" step="0.5" id="labB0" value="${cfg.b0}">to<input type="number" step="0.5" id="labB1" value="${cfg.b1}"></span></label>
+        <label class="ctl">Step<input type="number" step="0.1" min="0.1" id="labStep" value="${cfg.step}"></label>
+        <label class="ctl">Min. width<input type="number" step="1" min="1" id="labMinW" value="${cfg.minw}"></label>
+        <button class="btn primary" id="labRun" ${job && job.running ? 'disabled' : ''}>Compute ${ncell} fits</button>
+        ${job && job.running ? `<div style="display:flex;gap:8px;align-items:center;flex:1;min-width:220px"><div class="progress"><div id="mapBar" style="width:${100 * job.done / Math.max(1, job.total)}%"></div></div><span class="faint" id="mapText"></span><button class="btn small" id="labCancel">Cancel</button></div>` : ''}
+      </div></div></div>
+    <div class="lab-grid">
+      <div class="card"><div class="card-h"><h3>${S.map ? esc(S.map.window) + ' · ' + esc(base(S.map.spectrum)) : 'Map'}</h3><span class="grow"></span>
+        <select id="labQty">${syms.map(s => `<optgroup label="${esc(s)}"><option value="scd:${esc(s)}">${esc(s)} slant column</option><option value="err:${esc(s)}">${esc(s)} error</option><option value="rel:${esc(s)}">${esc(s)} relative error</option></optgroup>`).join('')}
+          <optgroup label="Fit"><option value="rms">RMS</option><option value="chi2">χ²</option><option value="iterations">iterations</option></optgroup></select></div>
+        <div class="card-b fig" id="mapFig">${S.map ? '' : '<div class="empty" style="padding:60px 20px">Choose the ranges and press <b>Compute</b>. Each cell is one fit; hover a cell to read it, click it to pick that window.</div>'}</div></div>
+      <div class="card"><div class="card-h"><h3>Cell</h3></div><div class="card-b" id="mapCell"><p class="faint" style="margin:0">Hover or click a cell.</p></div>
+        <div class="card-b" style="border-top:1px solid var(--border)"><p class="hint" style="margin:0">A good fit window gives a slant column that changes little when the window moves a little, with a small error and RMS.
+          This is <i>retrieval interval mapping</i> (Vogel et al., Atmos. Meas. Tech. 6, 275–299, 2013).</p></div></div>
+    </div>`;
+  $('#labQty').value = S.mapQty;
+  $('#labQty').addEventListener('change', e => { S.mapQty = e.target.value; drawMap(); });
+  $('#labWin').addEventListener('change', e => { S.win = e.target.value; renderWindows(); renderLab(); });
+  const upd = () => { S.labCfg = { window: wname, a0: +$('#labA0').value, a1: +$('#labA1').value, b0: +$('#labB0').value, b1: +$('#labB1').value, step: Math.max(0.1, +$('#labStep').value), minw: Math.max(1, +$('#labMinW').value) }; renderLab(); };
+  ['#labA0', '#labA1', '#labB0', '#labB1', '#labStep', '#labMinW'].forEach(id => $(id).addEventListener('change', upd));
+  $('#labRun').addEventListener('click', runMap);
+  $('#labCancel') && $('#labCancel').addEventListener('click', () => api('/api/cancel', { job: 'map' }));
+  drawMap();
+}
+let mapPoll = null;
+async function runMap() {
+  if (!S.selected) { toast('Select a spectrum first', 'bad'); return; }
+  const c = S.labCfg;
+  try {
+    await api('/api/map', { spectrum: S.selected, window: c.window, edits: sentEdits(), start_min: c.a0, start_max: c.a1,
+                            end_min: c.b0, end_max: c.b1, step: c.step, min_width: c.minw });
+  } catch (e) { toast(e.message, 'bad'); return; }
+  S.mapJob = { running: true, done: 0, total: 1 };
+  renderLab();
+  clearInterval(mapPoll);
+  mapPoll = setInterval(async () => {
+    let st; try { st = await api('/api/map'); } catch (e) { return; }
+    S.mapJob = st;
+    if ($('#mapBar')) { $('#mapBar').style.width = (100 * st.done / Math.max(1, st.total)) + '%'; $('#mapText').textContent = `${st.done}/${st.total}`; }
+    activity(st.running ? `Mapping ${st.done}/${st.total}…` : '');
+    if (!st.running) {
+      clearInterval(mapPoll);
+      if (st.error) toast(st.error === 'cancelled' ? 'Map cancelled' : st.error, st.error === 'cancelled' ? '' : 'bad');
+      else { S.map = st.map; S.mapCell = null; toast(`${st.total} fits in ${st.seconds.toFixed(2)} s`, 'good'); }
+      if (S.tab === 'lab') renderLab();
+    }
+  }, 300);
+}
+function drawMap() {
+  const el = $('#mapFig'); if (!el || !S.map) return;
+  const M = S.map, q = S.mapQty, P = PAL[theme()];
+  const A = M.starts, B = M.ends;
+  const vals = [];
+  M.cells.forEach(row => row.forEach(c => { const v = mapValue(c, q); if (v !== null && isFinite(v)) vals.push(v); }));
+  const sorted = vals.slice().sort((a, b) => a - b);
+  const qn = f => sorted.length ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(f * (sorted.length - 1))))] : 0;
+  let lo = qn(0.02), hi = qn(0.98); if (hi <= lo) { hi = lo + (Math.abs(lo) || 1) * 0.01; }
+  const W = Math.max(360, el.clientWidth - 28);
+  const m = { l: 62, r: 92, t: 12, b: 42 };
+  const iw = W - m.l - m.r, cw = iw / A.length, ch = Math.min(cw, 26), ih = ch * B.length, H = ih + m.t + m.b;
+  const cx = i => m.l + i * cw, cy = j => m.t + ih - (j + 1) * ch;
+  let s = svgOpen(W, H, P);
+  M.cells.forEach((row, i) => row.forEach((c, j) => {
+    const v = mapValue(c, q);
+    if (!c) return;
+    const fill = v === null || !isFinite(v) ? (c.error ? P.grid : 'none') : viridis((v - lo) / (hi - lo));
+    s += `<rect x="${cx(i).toFixed(1)}" y="${cy(j).toFixed(1)}" width="${(cw + 0.4).toFixed(1)}" height="${(ch + 0.4).toFixed(1)}" fill="${fill}"${c.error ? ` stroke="${P.axis}" stroke-width="0.5"` : ''}/>`;
+  }));
+  const xt = ticks(A[0], A[A.length - 1], Math.max(2, Math.round(iw / 70))), yt = ticks(B[0], B[B.length - 1], Math.max(2, Math.round(ih / 36)));
+  const sx = v => m.l + (v - A[0] + 0.5 * (A[1] - A[0] || 1)) / ((A[1] - A[0] || 1) * A.length) * iw;
+  const sy = v => m.t + ih - (v - B[0] + 0.5 * (B[1] - B[0] || 1)) / ((B[1] - B[0] || 1) * B.length) * ih;
+  xt.t.forEach(v => s += `<text x="${sx(v)}" y="${m.t + ih + 17}" text-anchor="middle" font-size="11" fill="${P.muted}">${num(v)}</text>`);
+  yt.t.forEach(v => s += `<text x="${m.l - 7}" y="${sy(v)}" dy="0.33em" text-anchor="end" font-size="11" fill="${P.muted}">${num(v)}</text>`);
+  s += `<text x="${m.l + iw / 2}" y="${H - 6}" text-anchor="middle" font-size="11" fill="${P.muted}">Start of the fit window (nm)</text>`;
+  s += `<text transform="translate(14,${m.t + ih / 2}) rotate(-90)" text-anchor="middle" font-size="11" fill="${P.muted}">End of the fit window (nm)</text>`;
+  // colour bar
+  const bx = W - m.r + 18;
+  for (let k = 0; k < 60; k++) s += `<rect x="${bx}" y="${(m.t + ih - (k + 1) * ih / 60).toFixed(1)}" width="12" height="${(ih / 60 + 0.5).toFixed(1)}" fill="${viridis(k / 59)}"/>`;
+  const ct = ticks(lo, hi, 5), ctl = tickText(ct.t, ct.step);
+  ct.t.forEach((v, k) => { const y = m.t + ih - (v - lo) / (hi - lo) * ih; if (y >= m.t - 1 && y <= m.t + ih + 1) s += `<text x="${bx + 17}" y="${y}" dy="0.33em" font-size="10.5" fill="${P.muted}">${ctl.labels[k]}</text>`; });
+  if (ctl.e) s += `<text x="${bx}" y="${m.t + ih + 17}" font-size="10.5" fill="${P.muted}">×10${sup(ctl.e)}</text>`;
+  // the current window
+  const ws = winSettings(M.window);
+  if (ws && ws.lmin >= A[0] - 1e-9 && ws.lmin <= A[A.length - 1] + 1e-9 && ws.lmax >= B[0] - 1e-9 && ws.lmax <= B[B.length - 1] + 1e-9)
+    s += `<circle cx="${sx(ws.lmin)}" cy="${sy(ws.lmax)}" r="6" fill="none" stroke="#fff" stroke-width="2.5"/><circle cx="${sx(ws.lmin)}" cy="${sy(ws.lmax)}" r="6" fill="none" stroke="${P.cross}" stroke-width="1"/>`;
+  s += '<g class="hover"></g></svg><div class="tip"></div>';
+  el.innerHTML = s;
+  const svg = $('svg', el), g = $('g.hover', el);
+  const cellAt = ev => {
+    const r = svg.getBoundingClientRect(), k = W / r.width;
+    const i = Math.floor(((ev.clientX - r.left) * k - m.l) / cw), j = Math.floor((m.t + ih - (ev.clientY - r.top) * k) / ch);
+    return i >= 0 && i < A.length && j >= 0 && j < B.length && M.cells[i][j] ? { i, j } : null;
+  };
+  const outline = (c, color, w) => c ? `<rect x="${cx(c.i)}" y="${cy(c.j)}" width="${cw}" height="${ch}" fill="none" stroke="${color}" stroke-width="${w}"/>` : '';
+  const redraw = () => g.innerHTML = outline(S.mapCell, '#fff', 2.5) + outline(S.mapCell, P.cross, 1) + outline(S.mapHover, P.cross, 1.5);
+  svg.addEventListener('mousemove', ev => { S.mapHover = cellAt(ev); svg.style.cursor = S.mapHover ? 'pointer' : ''; redraw(); showCell(S.mapHover || S.mapCell); });
+  svg.addEventListener('mouseleave', () => { S.mapHover = null; redraw(); showCell(S.mapCell); });
+  svg.addEventListener('click', ev => { S.mapCell = cellAt(ev); redraw(); showCell(S.mapCell); });
+  redraw(); showCell(S.mapCell);
+}
+function showCell(ij) {
+  const el = $('#mapCell'); if (!el || !S.map) return;
+  if (!ij) { el.innerHTML = '<p class="faint" style="margin:0">Hover or click a cell.</p>'; return; }
+  const M = S.map, c = M.cells[ij.i][ij.j], a = M.starts[ij.i], b = M.ends[ij.j];
+  if (c.error) { el.innerHTML = `<b>${a.toFixed(1)} – ${b.toFixed(1)} nm</b><p class="banner" style="margin-top:8px">${esc(c.error)}</p>`; return; }
+  const pw = projWin(M.window), syms = pw ? pw.xs.map(x => x.sym).filter(s => s in c.scd) : Object.keys(c.scd);
+  el.innerHTML = `<div style="font-size:15px;font-weight:650;margin-bottom:8px">${a.toFixed(1)} – ${b.toFixed(1)} nm</div>
+    <div class="kv">${syms.map(s => `<span>${esc(s)}</span><span>${pm(c.scd[s], c.err[s])}</span>`).join('')}
+      <span>RMS</span><span>${num(c.rms, 3)}</span><span>χ²</span><span>${num(c.chi2, 3)}</span><span>iterations</span><span>${c.iterations}</span></div>
+    ${S.mapCell && S.mapCell.i === ij.i && S.mapCell.j === ij.j ? `<button class="btn primary small" id="useCell" style="margin-top:12px;width:100%;justify-content:center">Use ${a.toFixed(1)} – ${b.toFixed(1)} nm for ${esc(M.window)}</button>` : '<p class="faint" style="margin:10px 0 0;font-size:12px">Click to select this window.</p>'}`;
+  $('#useCell') && $('#useCell').addEventListener('click', () => { setEdits(M.window, { lmin: a, lmax: b }); toast(`${M.window}: fit window ${a.toFixed(1)} – ${b.toFixed(1)} nm`, 'good'); drawMap(); });
+}
+
+// =============================================================================
+// project pane
+// =============================================================================
+function renderProjectPane() {
+  const el = $('#pane-project'), p = S.project;
+  if (!p) { el.innerHTML = '<div class="empty">Open a project first.</div>'; return; }
+  const name = S.win && projWin(S.win) ? S.win : p.windows[0].name;
+  const ws = winSettings(name), w = ws.w;
+  const polys = []; for (let k = -1; k <= Math.max(8, ws.poly); k++) polys.push(k);
+  el.innerHTML = `
+    <div class="proj-grid">
+      <div class="card"><div class="card-h"><h3>Project</h3></div><div class="card-b"><div class="kv">
+        <span>Name</span><span>${esc(p.name)}</span><span>File</span><span class="mono" style="font-size:11.5px;word-break:break-all">${esc(tilde(p.path))}</span>
+        <span>Detector</span><span>${p.pixels} pixels (MFC STD)</span><span>Interpolation</span><span>${esc(p.interpolation)}</span>
+        <span>Convergence</span><span>${p.convergence}</span><span>Spectra listed</span><span>${p.spectra.length}</span>
+        <span>Dark current</span><span class="mono" style="font-size:11.5px">${esc(p.dark ? base(p.dark) : 'none')}</span><span>Offset</span><span class="mono" style="font-size:11.5px">${esc(p.offset ? base(p.offset) : 'none')}</span>
+      </div></div></div>
+      <div class="card"><div class="card-h"><h3>Analysis window</h3><select id="pwSel">${p.windows.map(x => `<option ${x.name === name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+        <label class="switch"><input type="checkbox" id="pwOn" ${ws.enabled ? 'checked' : ''}>use</label></div>
+        <div class="card-b">
+          <div class="field-row"><label>Interval</label><input type="number" step="0.1" id="pwMin" value="${ws.lmin}"> <span class="faint">to</span> <input type="number" step="0.1" id="pwMax" value="${ws.lmax}"> <span class="faint">nm</span></div>
+          <div class="field-row"><label>Polynomial</label><select id="pwPoly">${polys.map(k => `<option value="${k}" ${k === ws.poly ? 'selected' : ''}>${k < 0 ? 'none' : 'order ' + k}</option>`).join('')}</select>
+            <button class="btn small" id="pwReset" ${S.edits[name] ? '' : 'disabled'}>Reset to project</button></div>
+          <p class="hint">Linear offset: ${w.linear_offset < 0 ? 'none' : 'order ' + w.linear_offset} · non-linear offset: ${esc(w.offset || 'none')} · gaps: ${w.gaps.length ? w.gaps.map(g => g[0] + '–' + g[1] + ' nm').join(', ') : 'none'}</p>
+        </div></div>
+    </div>
+    <div class="card"><div class="card-h"><h3>Cross sections</h3><span class="faint">${esc(name)}</span></div><div class="card-b">
+      <table class="xs-table"><thead><tr><th style="width:50px">Fit</th><th>Symbol</th><th>Use</th><th>File</th></tr></thead><tbody>
+      ${w.xs.map((c, i) => `<tr><td><input type="checkbox" data-sym="${esc(c.sym)}" ${ws.exclude.has(c.sym) ? '' : 'checked'}></td>
+        <td><span class="swatch" style="background:${speciesColor(c.sym, i)}"></span> ${esc(c.sym)} ${c.ok ? '' : '<span class="pill bad">file missing</span>'}</td><td>${esc(c.use)}</td>
+        <td class="file" title="${esc(c.file)}">${esc(tilde(c.file))}</td></tr>`).join('')}
+      </tbody></table></div></div>
+    <div class="card"><div class="card-h"><h3>Shift and stretch, reference</h3></div><div class="card-b">
+      <table class="xs-table"><thead><tr><th>Symbols</th><th>Shift</th><th>Stretch</th></tr></thead><tbody>
+      ${w.shifts.map(g => `<tr><td>${esc(g.symbols.join(', '))}</td><td>${esc(g.shift)}</td><td>${esc(g.stretch)}</td></tr>`).join('')}</tbody></table>
+      <p class="hint">Reference: <span class="mono">${esc(tilde(w.reference))}</span> ${w.reference_ok ? '' : '<span class="pill bad">missing</span>'}</p>
+    </div></div>`;
+  $('#pwSel').addEventListener('change', e => { S.win = e.target.value; renderWindows(); renderProjectPane(); });
+  $('#pwOn').addEventListener('change', e => setEdits(name, { enabled: e.target.checked }));
+  const rng = () => { const a = +$('#pwMin').value, b = +$('#pwMax').value; if (b - a >= 1) setEdits(name, { lmin: a, lmax: b }); else toast('The fitting interval must be at least 1 nm wide', 'bad'); };
+  $('#pwMin').addEventListener('change', rng); $('#pwMax').addEventListener('change', rng);
+  $('#pwPoly').addEventListener('change', e => setEdits(name, { poly_order: +e.target.value }));
+  $('#pwReset').addEventListener('click', () => resetWindow(name));
+  $$('input[data-sym]', el).forEach(c => c.addEventListener('change', () => toggleXs(name, c.dataset.sym)));
+}
+
+// =============================================================================
+// about, welcome, shortcuts
+// =============================================================================
+const MOD = isMac ? '⌘' : 'Ctrl';
+const KEYS = [
+  ['Fitting', [[['↵'], 'Fit the selected spectrum'], [['↓', 'J'], 'Next spectrum (fits it)'], [['↑', 'K'], 'Previous spectrum (fits it)'],
+               [['Home'], 'First spectrum'], [['End'], 'Last spectrum'], [['PgDn'], '10 spectra on'], [['PgUp'], '10 spectra back'],
+               [['←'], 'Previous analysis window'], [['→'], 'Next analysis window'], [['1', '…', '9'], 'Analysis window 1-9']]],
+  ['Fit window', [[['['], 'Start 0.5 nm lower'], [[']'], 'Start 0.5 nm higher'], [['Shift', '['], 'End 0.5 nm lower'], [['Shift', ']'], 'End 0.5 nm higher'],
+                  [[','], 'Polynomial order −1'], [['.'], 'Polynomial order +1'], [[MOD, 'Z'], 'Undo'], [[MOD, 'Shift', 'Z'], 'Redo']]],
+  ['Files', [[[MOD, 'O'], 'Open a project'], [[MOD, 'Shift', 'O'], 'Analyse the spectra of a folder'], [[MOD, 'S'], 'Save the project as…'],
+             [[MOD, 'E'], 'Export the results table (CSV)'], [[MOD, '↵'], 'Run all listed spectra']]],
+  ['View', [[['F'], 'Fit'], [['M'], 'Fit window map'], [['R'], 'Results'], [['P'], 'Project'], [['/'], 'Filter the spectra'],
+            [['D'], 'Light / dark'], [['?'], 'This list'], [['Esc'], 'Close a dialog']]],
+];
+function keysHtml() {
+  return KEYS.map(([g, ks]) => `<h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)">${g}</h4>
+    <div class="keys" style="margin-bottom:16px">${ks.map(([k, d]) => `<span class="k">${k.map(x => x === '…' ? '…' : `<kbd>${esc(x)}</kbd>`).join(' ')}</span><span>${esc(d)}</span>`).join('')}</div>`).join('');
+}
+function renderAbout() {
+  const st = S.st || {};
+  $('#pane-about').innerHTML = `<div class="about">
+    <div class="card"><div class="card-b" style="padding:18px 20px">
+      <h2 style="margin:0 0 4px">MiniDOAS.jl ${esc(st.version || '')}</h2>
+      <p class="muted" style="margin-top:0">Differential Optical Absorption Spectroscopy in Julia; the fit is a port of QDOAS's analysis core</p>
+      <p>MiniDOAS.jl reads QDOAS project files and reproduces QDOAS's optical-density fit (DOAS) to floating-point precision:
+        slant columns, their errors, shifts, stretches, offsets and residuals. It is based on
+        <a href="https://uv-vis.aeronomie.be/software/QDOAS/" target="_blank" rel="noopener">QDOAS</a>, the DOAS software developed at the Royal Belgian
+        Institute for Space Aeronomy (BIRA-IASB) and S[&amp;]T, released under the BSD-3-Clause license
+        (<a href="https://github.com/UVVIS-BIRA-IASB/qdoas" target="_blank" rel="noopener">source</a>). MiniDOAS.jl is independent work and is not affiliated with or endorsed by BIRA-IASB or S[&amp;]T.</p>
+      <p>Please cite QDOAS: C. Fayt, T. Danckaert, M. Van Roozendael and J. Vlietinck, <i>QDOAS trace gas retrieval software</i>,
+        Royal Belgian Institute for Space Aeronomy, <a href="https://doi.org/10.18758/oqvqk2j3" target="_blank" rel="noopener">doi:10.18758/oqvqk2j3</a>.</p>
+      <p>Author: Sunandan Mahant &lt;sunandanmahant@outlook.com&gt;. BSD-3-Clause license.</p>
+      <p class="faint" style="margin-bottom:0">Julia ${esc(st.julia || '')}, ${st.threads || '?'} thread${st.threads === 1 ? '' : 's'}${st.threads === 1 ? ' — start Julia with <span class="mono">-t auto</span> to run batches and maps in parallel' : ''}.</p>
+    </div></div>
+    <div class="card"><div class="card-h"><h3>Keyboard shortcuts</h3></div><div class="card-b">${keysHtml()}</div></div></div>`;
+}
+function welcomeHtml() {
+  const rec = pref('recent', []), ex = (S.st && S.st.example_projects) || [];
+  const list = (paths, title) => paths.length ? `<h4 style="margin:18px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)">${title}</h4>
+    <div class="recent">${paths.map(p => `<button data-open="${esc(p)}"><span>${esc(base(p).replace(/\.xml$/i, ''))}</span><span class="p">${esc(tilde(p))}</span></button>`).join('')}</div>` : '';
+  return `<div class="welcome"><div class="card"><div class="card-b" style="padding:26px 28px">
+    <h1>Open a QDOAS project</h1>
+    <p>MiniDOAS.jl reads the project files (.xml) that QDOAS saves, fits their spectra exactly as QDOAS does, and lets you explore the fit windows.</p>
+    <button class="btn primary" id="wOpen">Open project… <span class="kbdhint">${MOD} O</span></button>
+    ${list(rec, 'Recent')}${list(ex.filter(p => !rec.includes(p)), 'Examples')}
+    ${ex.length ? '' : `<p class="hint" style="margin-top:18px">Examples: <span class="mono">julia --project examples/ace_maxdoas/prepare.jl</span> prepares real MAX-DOAS spectra;
+      <span class="mono">examples/run_gui.jl</span> makes a synthetic data set.</p>`}
+  </div></div></div>`;
+}
+function bindWelcome(el) {
+  $('#wOpen', el) && $('#wOpen', el).addEventListener('click', openProjectDialog);
+  $$('[data-open]', el).forEach(b => b.addEventListener('click', () => loadProject(b.dataset.open)));
+}
+
+// =============================================================================
+// tabs, theme, resizing
+// =============================================================================
+function showTab(t) {
+  S.tab = t; setPref('tab', t);
+  $$('.tab').forEach(x => x.classList.toggle('active', x.dataset.pane === t));
+  $$('.pane').forEach(x => x.classList.toggle('active', x.id === 'pane-' + t));
+  renderTab();
+}
+function renderTab() {
+  if (S.tab === 'fit') renderFitPane();
+  else if (S.tab === 'lab') renderLab();
+  else if (S.tab === 'results') renderResults();
+  else if (S.tab === 'project') renderProjectPane();
+  else renderAbout();
+}
+function renderAll() { renderTab(); }
+$$('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.pane)));
+function setTheme(t) { document.documentElement.dataset.theme = t; setPref('theme', t); renderTab(); }
+$('#themeBtn').addEventListener('click', () => setTheme(theme() === 'dark' ? 'light' : 'dark'));
+let lastW = 0;
+new ResizeObserver(debounce(() => {
+  const w = $('.work').clientWidth; if (Math.abs(w - lastW) < 4) return; lastW = w;
+  if (S.tab === 'fit') drawFitFigures(); else if (S.tab === 'results') drawResultsChart(); else if (S.tab === 'lab') drawMap();
+}, 120)).observe($('.work'));
+
+// =============================================================================
+// exports
+// =============================================================================
+async function exportCsvAll() {
+  if (!S.project) return;
+  try { await downloadFrom('/api/results.csv', { edits: sentEdits() }, 'results.csv'); }
+  catch (e) { toast(e.message + (/nothing analysed/.test(e.message) ? ' — fit some spectra or press Run all' : ''), 'bad'); }
+}
+async function exportCsvOne() {
+  if (!S.fit) return toast('Fit a spectrum first', 'bad');
+  try { await downloadFrom('/api/results.csv', { edits: sentEdits(), spectra: [S.fit.spectrum] }, base(S.fit.spectrum) + '.csv'); }
+  catch (e) { toast(e.message, 'bad'); }
+}
+function exportCurves() {
+  const f = S.fit; if (!f) return toast('Fit a spectrum first', 'bad');
+  const w = f.windows.find(x => x.name === S.fitWin), c = w.curves;
+  const cols = [['wavelength_nm', c.lambda], ['measured_od', c.od], ['model_od', c.model], ['residual', c.residual]];
+  if (c.polynomial) cols.push(['polynomial', c.polynomial]);
+  if (c.offset) cols.push(['linear_offset', c.offset]);
+  for (const x of c.components) {
+    cols.push([x.name + '_fitted', x.value]);
+    cols.push([x.name + '_measured', x.value.map((v, i) => v === null || c.residual[i] === null ? null : v + c.residual[i])]);
+  }
+  let s = `# MiniDOAS.jl fitted curves\n# spectrum: ${f.spectrum}\n# window: ${w.name} (${c.fit_range[0]}-${c.fit_range[1]} nm), ${f.date} ${f.time} UTC\n`;
+  s += `# RMS ${w.rms}, chi2 ${w.chi2}, ${w.iterations} iterations\n`;
+  for (const t of w.terms) s += `# SlCol(${t.term}) = ${t.scd} +- ${t.err}\n`;
+  s += `# "<X>_measured" is the fitted <X> plus the residual (what the panels of the GUI show)\n`;
+  s += cols.map(x => x[0]).join(',') + '\n';
+  for (let i = 0; i < c.lambda.length; i++) s += cols.map(x => x[1][i] === null ? '' : x[1][i]).join(',') + '\n';
+  download(`${base(f.spectrum).replace(/\.[^.]*$/, '')}_${w.name}_curves.csv`, new Blob([s], { type: 'text/csv' }));
+}
+async function exportNetcdf() {
+  if (!S.fit) return toast('Fit a spectrum first', 'bad');
+  try { await downloadFrom('/api/netcdf', { spectrum: S.fit.spectrum, edits: sentEdits() }, base(S.fit.spectrum) + '.nc'); }
+  catch (e) { toast(e.message, 'bad'); }
+}
+// the whole fit as one figure, always in the light palette
+function composeFigure() {
+  const f = S.fit, w = f.windows.find(x => x.name === S.fitWin), P = PAL.light, W = 1400, fs = 13;
+  const c = w.curves;
+  const comps = c.components.map((x, i) => ({ ...x, color: speciesColor(x.name, i) }));
+  if (c.polynomial) comps.push({ name: 'Polynomial', value: c.polynomial, color: P.poly, poly: true });
+  if (c.offset) comps.push({ name: 'Linear offset', value: c.offset, color: P.poly, poly: true });
+  const cols = 3, cw = W / cols, rowsH = Math.ceil(comps.length / cols) * 218;
+  let y = 0, s = '';
+  s += `<text x="24" y="34" font-size="20" font-weight="650" fill="${P.text}">${esc(base(f.spectrum))} · ${esc(w.name)}</text>`;
+  s += `<text x="24" y="58" font-size="13" fill="${P.muted}">${esc(f.date)} ${esc(f.time)} UTC · fit window ${c.fit_range[0].toFixed(1)}–${c.fit_range[1].toFixed(1)} nm · RMS ${num(w.rms, 3)} · MiniDOAS.jl</text>`;
+  y = 74;
+  const sp = spectrumPanel(f, W - 20, P, w.name, 10, y, fs, 200);
+  const ws = winSettings(w.name), a = sp.p.X(ws ? ws.lmin : c.fit_range[0]), z = sp.p.X(ws ? ws.lmax : c.fit_range[1]);
+  s += `<rect x="${a}" y="${sp.p.box.T}" width="${z - a}" height="${sp.p.box.ih}" fill="${P.winFill}" stroke="${P.win}"/>`;
+  s += sp.svg.replace(/<g class="wbr"[^>]*>(<title>[^<]*<\/title>)?/g, '<g>');
+  y += sp.H + 12;
+  const od = odPanel(w, W - 20, P, 10, y, fs);
+  s += od.svg; y += od.H + 16;
+  comps.forEach((x, i) => {
+    const X0 = (i % cols) * cw, Y0 = y + Math.floor(i / cols) * 218;
+    s += `<rect x="${X0 + 6}" y="${Y0 + 22}" width="10" height="10" rx="2" fill="${x.color}"/><text x="${X0 + 22}" y="${Y0 + 32}" font-size="14" font-weight="600" fill="${P.text}">${esc(x.name)}</text>`;
+    if (!x.poly) s += `<text x="${X0 + cw - 12}" y="${Y0 + 32}" text-anchor="end" font-size="13" fill="${P.muted}">${esc(pm(x.scd, x.err))}</text>`;
+    s += speciesPanel(x, c.lambda, c.residual, x.color, cw - 6, P, X0, Y0 + 42, 12, 168).svg;
+  });
+  const H = y + rowsH + 10;
+  return svgOpen(W, H, P) + s + '</svg>';
+}
+function figName(ext) { const w = S.fit.windows.find(x => x.name === S.fitWin); return `${base(S.fit.spectrum).replace(/\.[^.]*$/, '')}_${w.name}.${ext}`; }
+function exportSvg() { if (!S.fit) return toast('Fit a spectrum first', 'bad'); download(figName('svg'), new Blob([composeFigure()], { type: 'image/svg+xml' })); }
+function exportPng() {
+  if (!S.fit) return toast('Fit a spectrum first', 'bad');
+  const svg = composeFigure(), m = svg.match(/width="(\d+)" height="(\d+)"/), w = +m[1], h = +m[2], img = new Image();
+  img.onload = () => {
+    const cv = document.createElement('canvas'); cv.width = w * 2; cv.height = h * 2;
+    const g = cv.getContext('2d'); g.scale(2, 2); g.drawImage(img, 0, 0);
+    cv.toBlob(b => download(figName('png'), b), 'image/png');
+  };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+const EXPORTS = { csvAll: exportCsvAll, csvOne: exportCsvOne, netcdf: exportNetcdf, curves: exportCurves, svg: exportSvg, png: exportPng };
+$('#exportBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  const m = $('#exportMenu');
+  $$('button', m).forEach(b => b.disabled = !S.project || (b.dataset.act !== 'csvAll' && !S.fit));
+  m.classList.toggle('open');
+});
+$('#exportMenu').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; $('#exportMenu').classList.remove('open'); EXPORTS[b.dataset.act](); });
+document.addEventListener('click', e => { if (!e.target.closest('.menu-wrap')) $('#exportMenu').classList.remove('open'); });
+
+// =============================================================================
+// file dialog: open a project, choose a folder of spectra, save a project
+// =============================================================================
+const FD = { mode: 'project', data: null, sel: -1, rows: [], resolve: null };
+function fileDialog(mode, title, okText, start) {
+  return new Promise(resolve => {
+    Object.assign(FD, { mode, resolve, sel: -1 });
+    $('#fdTitle').textContent = title;
+    $('#fdOk').textContent = okText;
+    $('#fdFolderOpts').classList.toggle('hidden', mode !== 'folder');
+    $('#fdSaveOpts').classList.toggle('hidden', mode !== 'save');
+    $('#fdAllWrap').classList.toggle('hidden', mode === 'folder');
+    $('#fdFilter').value = pref('folderFilter', '*.STD');
+    $('#fileModal').classList.add('open');
+    fdGo(start || pref('lastDir', '') || (S.st && S.st.home) || '');
+    setTimeout(() => (mode === 'save' ? $('#fdName') : $('#fdList')).focus(), 30);
+  });
+}
+function fdClose(v) { $('#fileModal').classList.remove('open'); const r = FD.resolve; FD.resolve = null; r && r(v); }
+async function fdGo(path) {
+  try {
+    const d = await api('/api/browse', { path });
+    FD.data = d; FD.sel = -1;
+    $('#fdPath').value = '';
+    fdRender();
+  } catch (e) { toast(e.message, 'bad'); if (!FD.data) fdGo(''); }
+}
+function fdFiles() {
+  const d = FD.data; if (!d) return [];
+  if (FD.mode === 'folder') { const rx = globRx($('#fdFilter').value.trim() || '*'); return d.files.filter(f => !rx || rx.test(f.name)); }
+  if ($('#fdAll').checked) return d.files;
+  return d.files.filter(f => /\.xml$/i.test(f.name));
+}
+const ICON_DIR = '<svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h3.6l2 2h7.4A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>';
+const ICON_FILE = '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>';
+function fdRender() {
+  const d = FD.data; if (!d) return;
+  // breadcrumbs
+  const sep = d.sep, crumbs = [];
+  const home = d.home.replace(/[\\/]$/, ''), inHome = d.path === home || d.path.startsWith(home + sep);
+  const rest = inHome ? d.path.slice(home.length) : d.path;
+  let acc = inHome ? home : d.path.startsWith('/') ? '/' : '';
+  if (inHome) crumbs.push(['~', home]); else if (d.path.startsWith('/')) crumbs.push(['/', '/']);
+  rest.split(/[\\/]/).filter(Boolean).forEach((p, i) => {
+    acc = (i === 0 && !inHome && !d.path.startsWith('/')) ? p + sep : acc + (acc.endsWith(sep) ? '' : sep) + p;
+    crumbs.push([p, acc]);
+  });
+  $('#fdCrumbs').innerHTML = crumbs.map(([n, p], i) => `${i > 1 || (i === 1 && crumbs[0][0] !== '/') ? '<span class="slash">›</span>' : ''}<button data-go="${esc(p)}" title="${esc(p)}">${esc(n)}</button>`).join('');
+  setTimeout(() => { const c = $('#fdCrumbs'); c.scrollLeft = c.scrollWidth; });
+  // places
+  const places = [['Home', d.home]];
+  if (S.project) places.push(['Project folder', S.project.path.replace(/[\\/][^\\/]*$/, '')]);
+  if (S.st && S.st.examples) places.push(['Examples', S.st.examples]);
+  const recent = pref('recentDirs', []).filter(p => !places.some(x => x[1] === p)).slice(0, 6);
+  $('#fdPlaces').innerHTML = `<div class="mh">Places</div>${places.map(([n, p]) => `<button data-go="${esc(p)}" title="${esc(p)}">${ICON_DIR}${esc(n)}</button>`).join('')}
+    <div class="mh">${d.roots.length > 1 ? 'Drives' : 'Computer'}</div>${d.roots.map(r => `<button data-go="${esc(r)}">${ICON_DIR}${esc(r)}</button>`).join('')}
+    ${recent.length ? `<div class="mh">Recent</div>${recent.map(p => `<button data-go="${esc(p)}" title="${esc(p)}">${ICON_DIR}${esc(base(p) || p)}</button>`).join('')}` : ''}`;
+  // rows
+  const files = fdFiles();
+  FD.rows = d.dirs.map(n => ({ dir: true, name: n })).concat(files.map(f => ({ dir: false, name: f.name, size: f.size })));
+  const kb = n => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+  const shownFiles = FD.mode === 'folder' ? FD.rows.filter(r => !r.dir).slice(0, 400) : null;
+  if (FD.mode === 'folder') FD.rows = FD.rows.filter(r => r.dir).concat(shownFiles);
+  $('#fdList').innerHTML = FD.rows.length ? FD.rows.map((r, i) =>
+    `<div class="fd-row ${r.dir ? 'dir' : ''} ${i === FD.sel ? 'sel' : ''} ${FD.mode === 'folder' && !r.dir ? 'dim' : ''}" data-i="${i}">${r.dir ? ICON_DIR : ICON_FILE}<span>${esc(r.name)}</span>${r.dir ? '' : `<span class="size">${kb(r.size)}</span>`}</div>`).join('')
+    : `<div class="fd-empty">${FD.mode === 'project' ? 'No .xml project files here' : 'Empty folder'}</div>`;
+  if (FD.mode === 'folder') {
+    $('#fdCount').textContent = `${files.length} matching file${files.length === 1 ? '' : 's'} here`;
+    $('#fdOk').textContent = `Use “${base(d.path) || d.path}”`;
+  }
+}
+function fdActivate(i) {
+  const r = FD.rows[i], d = FD.data; if (!r) return;
+  const full = d.path.replace(/[\\/]$/, '') + d.sep + r.name;
+  if (r.dir) { fdGo(full); return; }
+  if (FD.mode === 'project') fdFinish(full);
+  else if (FD.mode === 'save') { $('#fdName').value = r.name; }
+}
+function fdSelect(i) {
+  FD.sel = clamp(i, 0, FD.rows.length - 1);
+  $$('.fd-row').forEach(x => x.classList.toggle('sel', +x.dataset.i === FD.sel));
+  const el = $(`.fd-row[data-i="${FD.sel}"]`); el && el.scrollIntoView({ block: 'nearest' });
+  const r = FD.rows[FD.sel];
+  if (r && !r.dir && FD.mode === 'save') $('#fdName').value = r.name;
+}
+function rememberDir(p) { const l = pref('recentDirs', []).filter(x => x !== p); l.unshift(p); setPref('recentDirs', l.slice(0, 8)); setPref('lastDir', p); }
+function fdFinish(value) {
+  const d = FD.data;
+  if (FD.mode === 'folder') {
+    setPref('folderFilter', $('#fdFilter').value.trim() || '*');
+    rememberDir(d.path);
+    fdClose({ dir: d.path, filter: $('#fdFilter').value.trim() || '*', recursive: $('#fdRecursive').checked });
+  } else if (FD.mode === 'save') {
+    const n = $('#fdName').value.trim(); if (!n) { toast('Enter a file name', 'bad'); return; }
+    rememberDir(d.path);
+    fdClose(/^([a-zA-Z]:)?[\\/]/.test(n) ? n : d.path.replace(/[\\/]$/, '') + d.sep + n);
+  } else {
+    rememberDir(d.path);
+    fdClose(value);
+  }
+}
+$('#fdList').addEventListener('click', e => { const r = e.target.closest('.fd-row'); if (r) fdSelect(+r.dataset.i); });
+$('#fdList').addEventListener('dblclick', e => { const r = e.target.closest('.fd-row'); if (r) fdActivate(+r.dataset.i); });
+$('#fdCrumbs').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) fdGo(b.dataset.go); });
+$('#fdPlaces').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) fdGo(b.dataset.go); });
+$('#fdUp').addEventListener('click', () => FD.data && fdGo(FD.data.parent));
+$('#fdAll').addEventListener('change', fdRender);
+$('#fdFilter').addEventListener('input', debounce(fdRender, 150));
+$('#fdPath').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const v = e.target.value.trim(); if (!v) return;
+  if (FD.mode === 'project' && /\.xml$/i.test(v)) fdFinish(v); else fdGo(v);
+});
+$('#fdOk').addEventListener('click', () => {
+  if (FD.mode === 'project') {
+    const r = FD.rows[FD.sel];
+    if (!r) { toast('Choose a project file (.xml)', 'bad'); return; }
+    fdActivate(FD.sel);
+  } else fdFinish();
+});
+$('#fileModal').addEventListener('keydown', e => {
+  const typing = e.target.matches('input');
+  if (e.key === 'Escape') { e.preventDefault(); fdClose(null); return; }
+  if (typing && e.target.id !== 'fdName') return;
+  if (e.key === 'ArrowDown') { e.preventDefault(); fdSelect(FD.sel + 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); fdSelect(FD.sel - 1); }
+  else if (e.key === 'Enter' && !typing) { e.preventDefault(); if (FD.sel >= 0) fdActivate(FD.sel); else if (FD.mode !== 'project') fdFinish(); }
+  else if (e.key === 'Enter' && typing) { e.preventDefault(); fdFinish(); }
+  else if (e.key === 'Backspace' && !typing) { e.preventDefault(); FD.data && fdGo(FD.data.parent); }
+  else if (!typing && e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.metaKey) {
+    const k = FD.rows.findIndex((r, i) => r.name.toLowerCase().startsWith(e.key.toLowerCase()) && i > FD.sel);
+    const j = k >= 0 ? k : FD.rows.findIndex(r => r.name.toLowerCase().startsWith(e.key.toLowerCase()));
+    if (j >= 0) fdSelect(j);
+  }
+});
+$$('[data-close]').forEach(b => b.addEventListener('click', () => { const m = b.closest('.modal'); m.id === 'fileModal' ? fdClose(null) : m.classList.remove('open'); }));
+$$('.modal').forEach(m => m.addEventListener('mousedown', e => { if (e.target === m) { m.id === 'fileModal' ? fdClose(null) : m.classList.remove('open'); } }));
+
+async function openProjectDialog() {
+  const start = S.project ? S.project.path.replace(/[\\/][^\\/]*$/, '') : '';
+  const p = await fileDialog('project', 'Open a QDOAS project', 'Open', start);
+  if (p) { await loadProject(p); showTab('fit'); }
+}
+async function openFolderDialog() {
+  if (!S.project) { toast('Open a project first: its analysis windows are applied to the spectra', 'bad'); return; }
+  const r = await fileDialog('folder', 'Choose a folder of spectra', 'Use this folder', S.selected ? S.selected.replace(/[\\/][^\\/]*$/, '') : '');
+  if (!r) return;
+  try {
+    const x = await api('/api/folder', r);
+    if (!x.spectra.length) { toast(`No files matching ${r.filter} in ${r.dir}`, 'bad'); return; }
+    S.spectra = x.spectra; S.fromFolder = r.dir; S.selected = x.spectra[0]; $('#specFilter').value = '';
+    renderSpectra(); toast(`${x.spectra.length} spectra from ${r.dir}`, 'good');
+  } catch (e) { toast(e.message, 'bad'); }
+}
+async function saveProjectDialog() {
+  if (!S.project) return;
+  const dir = S.project.path.replace(/[\\/][^\\/]*$/, '');
+  $('#fdName').value = base(S.project.path).replace(/(\.xml)?$/i, '_edited.xml');
+  const path = await fileDialog('save', 'Save the project, with your window edits, as', 'Save', dir);
+  if (!path) return;
+  try {
+    let r = await api('/api/save', { path, edits: sentEdits() });
+    if (r.exists) {
+      if (!confirm(`${r.exists} exists. Replace it?`)) return;
+      r = await api('/api/save', { path, edits: sentEdits(), overwrite: true });
+    }
+    toast('Saved ' + r.saved + (hasEdits() ? '' : '\n(no edits: a copy of the project)'), 'good');
+  } catch (e) { toast(e.message, 'bad'); }
+}
+$('#openBtn').addEventListener('click', openProjectDialog);
+$('#folderBtn').addEventListener('click', openFolderDialog);
+$('#saveBtn').addEventListener('click', saveProjectDialog);
+$('#keysBtn').addEventListener('click', () => { $('#keysBody').innerHTML = keysHtml(); $('#keysModal').classList.add('open'); });
+
+// =============================================================================
+// keyboard
+// =============================================================================
+function nudge(which, d) {
+  const name = S.fitWin || S.win; const ws = name && winSettings(name); if (!ws) return;
+  const r = v => Math.round(v * 10) / 10;
+  if (which === 'poly') { const k = clamp(ws.poly + d, -1, 8); if (k !== ws.poly) setEdits(name, { poly_order: k }); return; }
+  let a = ws.lmin, b = ws.lmax;
+  if (which === 'min') a = r(a + d); else b = r(b + d);
+  if (b - a < 1) return;
+  setEdits(name, { lmin: a, lmax: b });
+}
+function switchWindow(d, abs) {
+  const ws = S.fit ? S.fit.windows.map(w => w.name) : S.project ? S.project.windows.map(w => w.name) : [];
+  if (!ws.length) return;
+  let i = abs !== undefined ? abs : ws.indexOf(S.fitWin || S.win) + d;
+  if (i < 0 || i >= ws.length) return;
+  S.fitWin = S.win = ws[i]; renderWindows(); renderTab();
+}
+document.addEventListener('keydown', e => {
+  const mod = e.ctrlKey || e.metaKey, k = e.key;
+  if ($('#fileModal').classList.contains('open')) return;          // the dialog has its own keys
+  if (k === 'Escape') { $$('.modal.open').forEach(m => m.classList.remove('open')); $('#exportMenu').classList.remove('open'); return; }
+  if (mod && !e.altKey) {
+    const kl = k.toLowerCase();
+    if (kl === 'o') { e.preventDefault(); e.shiftKey ? openFolderDialog() : openProjectDialog(); }
+    else if (kl === 's') { e.preventDefault(); saveProjectDialog(); }
+    else if (kl === 'e') { e.preventDefault(); exportCsvAll(); }
+    else if (k === 'Enter') { e.preventDefault(); runBatch(); }
+    else if (kl === 'z' && !e.target.matches('input, select, textarea')) { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+    else if (kl === 'y' && !e.target.matches('input, select, textarea')) { e.preventDefault(); redo(); }
+    return;
+  }
+  if (e.target.matches('input, select, textarea') || e.altKey) return;
+  if ($('#keysModal').classList.contains('open') && k !== '?') return;
+  const map = {
+    'ArrowDown': () => step(1), 'j': () => step(1), 'ArrowUp': () => step(-1), 'k': () => step(-1),
+    'PageDown': () => step(10), 'PageUp': () => step(-10), 'Home': () => step(-1e9), 'End': () => step(1e9),
+    'Enter': () => { if (S.tab !== 'fit') showTab('fit'); fitSelected(); },
+    'ArrowLeft': () => switchWindow(-1), 'ArrowRight': () => switchWindow(1),
+    '[': () => nudge('min', -0.5), ']': () => nudge('min', 0.5), '{': () => nudge('max', -0.5), '}': () => nudge('max', 0.5),
+    ',': () => nudge('poly', -1), '.': () => nudge('poly', 1), '<': () => nudge('poly', -1), '>': () => nudge('poly', 1),
+    'f': () => showTab('fit'), 'm': () => showTab('lab'), 'r': () => showTab('results'), 'p': () => showTab('project'),
+    'd': () => setTheme(theme() === 'dark' ? 'light' : 'dark'),
+    '/': () => { $('#specFilter').focus(); $('#specFilter').select(); },
+    '?': () => { const m = $('#keysModal'); if (m.classList.contains('open')) m.classList.remove('open'); else { $('#keysBody').innerHTML = keysHtml(); m.classList.add('open'); } },
+  };
+  let f = map[k] || map[k.toLowerCase()];
+  if (!f && /^[1-9]$/.test(k)) f = () => switchWindow(0, +k - 1);
+  if (f) { e.preventDefault(); f(); }
+});
+
+// =============================================================================
+// start
+// =============================================================================
+// #spectrum=<file name>&window=<name>&tab=fit|lab|results|project&theme=light|dark
+async function applyHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('theme')) setTheme(h.get('theme'));
+  if (!S.project) return;
+  if (h.get('window')) { S.win = S.fitWin = h.get('window'); renderWindows(); }
+  if (h.get('filter')) { $('#specFilter').value = h.get('filter'); renderSpectra(); }
+  const sp = h.get('spectrum');
+  if (sp) { const p = S.spectra.find(x => base(x) === sp || x === sp); if (p) { markSelected(p, true); await fitSelected(); } }
+  if (h.get('batch')) await runBatch();
+  if (h.get('tab')) showTab(h.get('tab'));
+}
+(async () => {
+  document.documentElement.dataset.theme = pref('theme', 'light');
+  try {
+    const st = await api('/api/state');
+    S.st = st;
+    $('#ver').textContent = 'v' + st.version;
+    $('#runtime').textContent = `MiniDOAS.jl ${st.version} · Julia ${st.julia} · ${st.threads} thread${st.threads === 1 ? '' : 's'}`;
+    if (st.project) setProject(st.project);
+    else renderAll();
+    await applyHash();
+  } catch (e) { setConn(false); $('#runtime').textContent = 'Not connected'; toast(e.message, 'bad'); renderAll(); }
+})();
+window.addEventListener('hashchange', applyHash);
+// connection check for the status bar (no busy indicator)
+setInterval(() => fetch('/api/state').then(r => setConn(r.ok)).catch(() => setConn(false)), 15000);
+</script>
+</body>
+</html>
